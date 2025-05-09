@@ -1,7 +1,6 @@
 package com.example.giftrecommender.controller;
 
 import com.example.giftrecommender.common.BasicResponseDto;
-import com.example.giftrecommender.dto.request.RecommendationSessionRequestDto;
 import com.example.giftrecommender.dto.response.RecommendationSessionResponseDto;
 import com.example.giftrecommender.service.RecommendationSessionService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -10,22 +9,21 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
-@Tag(name = "추천 세션", description = "추천 세션 생성 API")
+import java.util.UUID;
+
+@Tag(name = "02-추천 세션", description = "추천 세션 생성 API")
 @RestController
 @RequiredArgsConstructor
-@RequestMapping("/api/recommendation-session")
+@RequestMapping("/api/guests/{guestId}/recommendation-sessions")
 public class RecommendationSessionController {
 
     private final RecommendationSessionService recommendationSessionService;
 
     @Operation(
             summary = "추천 세션 생성",
-            description = "게스트 ID를 기반으로 새로운 추천 세션을 생성합니다."
+            description = "게스트 ID를 기반으로 새로운 추천 세션을 생성합니다. (DB에 없을 시 생성한 게스트 ID를 넣어서 진행하시면 됩니다.)"
     )
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "추천 세션 생성 성공"),
@@ -35,9 +33,8 @@ public class RecommendationSessionController {
     })
     @PostMapping
     public ResponseEntity<BasicResponseDto<RecommendationSessionResponseDto>> createRecommendationSession(
-            @RequestBody RecommendationSessionRequestDto requestDto) {
-        return ResponseEntity.ok(BasicResponseDto.success("추천 세션 등록",
-                recommendationSessionService.createRecommendationSession(requestDto)));
+            @PathVariable("guestId") UUID guestId) {;
+        return ResponseEntity.ok(BasicResponseDto.success("추천 세션 등록", recommendationSessionService.createRecommendationSession(guestId)));
     }
 
 }
