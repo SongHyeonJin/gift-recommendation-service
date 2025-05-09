@@ -1,5 +1,6 @@
 package com.example.giftrecommender.domain.entity;
 
+import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.PrePersist;
@@ -17,6 +18,7 @@ import java.util.UUID;
 public class Guest {
 
     @Id
+    @Column(name = "guest_id")
     private UUID id;
 
     // 생성 시간
