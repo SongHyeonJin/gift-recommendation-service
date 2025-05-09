@@ -21,13 +21,14 @@ public class RecommendationSession {
     private UUID id;
 
     @ManyToOne
-    @JoinColumn(name = "guest_id")
+    @JoinColumn(name = "guest_id", nullable = false)
     private Guest guest;
 
     private LocalDateTime createdAt;
     private LocalDateTime endedAt;
 
     @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
     private SessionStatus status;
 
     @Builder
