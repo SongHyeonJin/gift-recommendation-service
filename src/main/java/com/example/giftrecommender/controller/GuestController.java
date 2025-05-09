@@ -13,7 +13,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-@Tag(name = "Guest", description = "비회원 관련 API")
+@Tag(name = "01-비회원", description = "비회원 관련 API")
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/guests")
