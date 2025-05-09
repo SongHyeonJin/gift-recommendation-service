@@ -7,7 +7,6 @@ import com.example.giftrecommender.domain.entity.RecommendationSession;
 import com.example.giftrecommender.domain.enums.SessionStatus;
 import com.example.giftrecommender.domain.repository.GuestRepository;
 import com.example.giftrecommender.domain.repository.RecommendationSessionRepository;
-import com.example.giftrecommender.dto.request.RecommendationSessionRequestDto;
 import com.example.giftrecommender.dto.response.RecommendationSessionResponseDto;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -23,8 +22,8 @@ public class RecommendationSessionService {
     private final GuestRepository guestRepository;
 
     @Transactional
-    public RecommendationSessionResponseDto createRecommendationSession(RecommendationSessionRequestDto requestDto) {
-        Guest guest = guestRepository.findById(requestDto.guestId()).orElseThrow(
+    public RecommendationSessionResponseDto createRecommendationSession(UUID guestId) {
+        Guest guest = guestRepository.findById(guestId).orElseThrow(
                 () -> new ErrorException(ExceptionEnum.GUEST_NOT_FOUND)
         );
 
