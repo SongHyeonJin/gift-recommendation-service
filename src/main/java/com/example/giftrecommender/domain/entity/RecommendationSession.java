@@ -24,6 +24,9 @@ public class RecommendationSession {
     @JoinColumn(name = "guest_id", nullable = false)
     private Guest guest;
 
+    @Column(nullable = false)
+    private String name;
+
     private LocalDateTime createdAt;
     private LocalDateTime endedAt;
 
@@ -32,9 +35,10 @@ public class RecommendationSession {
     private SessionStatus status;
 
     @Builder
-    public RecommendationSession(UUID id, Guest guest, SessionStatus status) {
+    public RecommendationSession(UUID id, Guest guest, String name, SessionStatus status) {
         this.id = id;
         this.guest = guest;
+        this.name = name;
         this.status = status;
     }
 
