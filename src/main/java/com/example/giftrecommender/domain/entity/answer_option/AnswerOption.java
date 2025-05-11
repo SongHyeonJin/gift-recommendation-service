@@ -1,0 +1,28 @@
+package com.example.giftrecommender.domain.entity.answer_option;
+
+import com.example.giftrecommender.domain.entity.question.Question;
+import jakarta.persistence.*;
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+
+@Entity
+@Getter
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
+public class AnswerOption {
+
+    @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "answer_option_id")
+    private Long id;
+
+    @Column(nullable = false)
+    private String content;
+
+    @Column(nullable = false)
+    private String recommendationKeyword;
+
+    @ManyToOne
+    @JoinColumn(name = "question_id", nullable = false)
+    private Question question;
+
+}
