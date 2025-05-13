@@ -44,6 +44,9 @@ dependencies {
 
 	// swagger UI
 	implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.3.0'
+
+	// 쿠팡 API 요청 시 HMAC 서명 생성을 위한 commons-codec 유틸
+	implementation 'commons-codec:commons-codec:1.15'
 }
 
 tasks.named('test') {

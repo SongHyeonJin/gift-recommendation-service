@@ -10,7 +10,9 @@ public enum ExceptionEnum {
     QUESTION_NOT_FOUND(HttpStatus.NOT_FOUND.value(), "질문을 찾을 수 없습니다."),
     OPTION_NOT_FOUND(HttpStatus.NOT_FOUND.value(), "선택지를 찾을 수 없습니다."),
     INTERNAL_SERVER_ERROR(HttpStatus.INTERNAL_SERVER_ERROR.value(), "서버 내부 오류가 발생했습니다."),
-    INVALID_AI_ANSWER_INDEX(HttpStatus.BAD_REQUEST.value(), "선택된 AI 답변 인덱스가 유효하지 않습니다.");
+    INVALID_AI_ANSWER_INDEX(HttpStatus.BAD_REQUEST.value(), "선택된 AI 답변 인덱스가 유효하지 않습니다."),
+    FORBIDDEN( HttpStatus.FORBIDDEN.value(),"접근 권한이 없습니다."),
+    NO_PRODUCT_MATCH(HttpStatus.BAD_REQUEST.value(), "추천 조건에 맞는 상품이 없습니다.");
 
 
     private final int statusCode;

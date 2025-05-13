@@ -1,7 +1,7 @@
 package com.example.giftrecommender.controller;
 
 import com.example.giftrecommender.common.BasicResponseDto;
-import com.example.giftrecommender.dto.RecommendationSessionRequestDto;
+import com.example.giftrecommender.dto.request.RecommendationSessionRequestDto;
 import com.example.giftrecommender.dto.response.RecommendationSessionResponseDto;
 import com.example.giftrecommender.service.RecommendationSessionService;
 import io.swagger.v3.oas.annotations.Operation;
