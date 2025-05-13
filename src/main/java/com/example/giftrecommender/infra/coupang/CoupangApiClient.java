@@ -25,11 +25,11 @@ public class CoupangApiClient {
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final CoupangApiConfig config;
 
-    public List<CoupangProductResponseDto> searchProducts(String keyword) {
+    public List<CoupangProductResponseDto> searchProducts(String keyword, int page) {
         try {
             // keyword를 인코딩
             String encodedKeyword = URLEncoder.encode(keyword, StandardCharsets.UTF_8);
-            String rawQuery = "keyword=" + encodedKeyword;
+            String rawQuery = "keyword=" + encodedKeyword + "&page=" + page;
 
             // 요청 경로 및 전체 URL 구성
             String method = "GET";
@@ -54,13 +54,11 @@ public class CoupangApiClient {
             log.info("[쿠팡 API 호출 정보]");
             log.info("keyword: {}", keyword);
             log.info("rawQuery: {}", rawQuery);
-            log.info("authorization: {}", authorization);
-            log.info("full URL: {}", fullUrl);
+//            log.info("authorization: {}", authorization);
 
             // URI 객체로 직접 생성해서 RestTemplate 전달 → 자동 인코딩 방지
-            URI uri = new URI(fullUrl);
             ResponseEntity<String> response = restTemplate.exchange(
-                    uri, HttpMethod.GET, new HttpEntity<>(headers), String.class
+                    new URI(fullUrl), HttpMethod.GET, new HttpEntity<>(headers), String.class
             );
 
             if (response.getStatusCode() == HttpStatus.OK) {
@@ -80,12 +78,27 @@ public class CoupangApiClient {
      * 응답 JSON에서 productData 파싱
      */
     private List<CoupangProductResponseDto> productsResponseDto(String body) throws Exception {
+        log.info("쿠팡 API 응답 바디: {}", body);
+
         List<CoupangProductResponseDto> responseDto = new ArrayList<>();
-        JsonNode productData = objectMapper.readTree(body).path("data").path("productData");
+
+        JsonNode root = objectMapper.readTree(body);
+        String code = root.path("code").asText();
+        String message = root.path("message").asText();
+        JsonNode productData = root.path("data").path("productData");
+
+        log.info("code={}, message={}", code, message);
+
+        if (!productData.isArray()) {
+            log.warn("⚠️ productData 필드가 없거나 배열이 아님. 실제 값: {}", productData.toString());
+            return List.of();
+        }
 
         for (JsonNode item : productData) {
             responseDto.add(CoupangProductResponseDto.of(item));
         }
+
+        log.info("productData 파싱 완료: {}개", responseDto.size());
         return responseDto;
     }
 
