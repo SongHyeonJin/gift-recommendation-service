@@ -15,7 +15,7 @@ public class KeywordGroup {
     @Column(name = "keyword_group_id")
     private Long id;
 
-    @Column(nullable = false, unique = true)
+    @Column(nullable = false, unique = true, length = 100)
     private String mainKeyword;
 
     public KeywordGroup(String mainKeyword) {

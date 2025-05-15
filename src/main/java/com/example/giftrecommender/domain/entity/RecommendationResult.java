@@ -7,6 +7,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Entity
 @Getter
@@ -17,21 +18,26 @@ public class RecommendationResult {
     @Column(name = "recommendation_result_id")
     private Long id;
 
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "guest_id", nullable = false)
     private Guest guest;
 
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "recommendation_session_id", nullable = false)
     private RecommendationSession recommendationSession;
 
     private LocalDateTime createdAt;
 
-    @Column(nullable = false, columnDefinition = "JSON")
-    private String keywords;
+    @ElementCollection
+    @CollectionTable(
+            name = "recommendation_keywords",
+            joinColumns = @JoinColumn(name = "recommendation_result_id")
+    )
+    @Column(name = "keyword", nullable = false)
+    private List<String> keywords;
 
     @Builder
-    public RecommendationResult(Guest guest, RecommendationSession recommendationSession, String keywords) {
+    public RecommendationResult(Guest guest, RecommendationSession recommendationSession, List<String> keywords) {
         this.guest = guest;
         this.recommendationSession = recommendationSession;
         this.keywords = keywords;

@@ -19,7 +19,7 @@ public class Question {
     private String content;
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
+    @Column(nullable = false, length = 20)
     private QuestionType type;
 
     @Column(name = "question_order", nullable = false)
