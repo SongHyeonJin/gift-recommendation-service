@@ -36,7 +36,10 @@ public class RecommendationSessionService {
                 .build();
 
         recommendationSessionRepository.save(recommendationSession);
-        return new RecommendationSessionResponseDto(recommendationSession.getId());
+        return new RecommendationSessionResponseDto(
+                recommendationSession.getId(),
+                recommendationSession.getName()
+        );
     }
 
 }
