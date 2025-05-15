@@ -26,7 +26,7 @@ public class QuestionController {
     @Operation(summary = "질문 목록 조회", description = "질문 리스트와 선택지를 조회합니다")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "질문 목록 조회 성공"),
-            @ApiResponse(responseCode = "500", description = "서서버 내부 오류")
+            @ApiResponse(responseCode = "500", description = "서버 내부 오류")
     })
     @GetMapping
     public ResponseEntity<BasicResponseDto<List<QuestionResponseDto>>> getQuestions() {
