@@ -15,13 +15,13 @@ public class AnswerOption {
     @Column(name = "answer_option_id")
     private Long id;
 
-    @Column(nullable = false)
+    @Column(nullable = false, length = 300)
     private String content;
 
-    @Column(nullable = false)
+    @Column(nullable = false, length = 100)
     private String recommendationKeyword;
 
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "question_id", nullable = false)
     private Question question;
 
