@@ -34,10 +34,7 @@ public class RecommendationController {
     })
     @PostMapping("/recommendation")
     public ResponseEntity<BasicResponseDto<RecommendationResponseDto>> getRecommendation(
-            @Parameter(description = "게스트 식별자", example = "0f7c2913-f43a-44ff-b008-ed0499d7962d")
             @PathVariable("guestId") UUID guestId,
-
-            @Parameter(description = "추천 세션 식별자", example = "120e8f45-b9f0-4bd3-b000-cca4327b14d0")
             @PathVariable("sessionId") UUID sessionId,
 
             @RequestBody RecommendationRequestDto request
@@ -45,4 +42,24 @@ public class RecommendationController {
         RecommendationResponseDto response = recommendationService.recommend(guestId, sessionId, request.keywords());
         return ResponseEntity.ok(BasicResponseDto.success("추천 완료", response));
     }
+
+    @Operation(
+            summary = "추천 결과 조회",
+            description = "추천 세션 ID(sessionId)를 기반으로 추천 결과를 조회합니다. 추천 생성 이후 다시 확인하거나 재접속 시 사용합니다."
+    )
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "추천 결과 조회 성공",
+                    content = @Content(schema = @Schema(implementation = RecommendationResponseDto.class))),
+            @ApiResponse(responseCode = "404", description = "추천 결과 없음"),
+            @ApiResponse(responseCode = "500", description = "서버 내부 오류")
+    })
+    @GetMapping("/recommendation")
+    public ResponseEntity<BasicResponseDto<RecommendationResponseDto>> getRecommendationResult(
+            @PathVariable("guestId") UUID guestId,
+            @PathVariable("sessionId") UUID sessionId
+    ) {
+        RecommendationResponseDto response = recommendationService.getRecommendationResult(guestId, sessionId);
+        return ResponseEntity.ok(BasicResponseDto.success("추천 결과 조회 성공", response));
+    }
+
 }
