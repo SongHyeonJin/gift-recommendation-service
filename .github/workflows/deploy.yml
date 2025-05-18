@@ -1,0 +1,99 @@
+name: CD - Deploy to EC2 (Main Only)
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+
+      - name: Build with Gradle
+        run: ./gradlew clean build -x test
+
+      - name: Save PEM key to file
+        run: |
+          echo "${{ secrets.EC2_KEY }}" > ec2_key.pem
+          chmod 600 ec2_key.pem
+
+      - name: Copy JAR to EC2
+        run: |
+          scp -i ec2_key.pem \
+            -o StrictHostKeyChecking=no \
+            build/libs/*.jar \
+            ${{ secrets.EC2_USERNAME }}@${{ secrets.EC2_HOST }}:/home/${{ secrets.EC2_USERNAME }}/app.jar
+
+      - name: SSH into EC2 and deploy
+        env:
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          REDIS_HOST: ${{ secrets.EC2_HOST }}
+          NAVER_CLIENT_ID: ${{ secrets.NAVER_CLIENT_ID }}
+          NAVER_CLIENT_SECRET: ${{ secrets.NAVER_CLIENT_SECRET }}
+        run: |
+          ssh -i ec2_key.pem \
+              -o StrictHostKeyChecking=no \
+              ${{ secrets.EC2_USERNAME }}@${{ secrets.EC2_HOST }} << EOF
+          
+            echo "[INFO] Writing multi-profile application-secret.yml..."          
+          
+          cat <<EOT > /home/${USER}/application-secret.yml
+          spring:
+            config:
+              activate:
+                on-profile: prod
+          
+            datasource:
+              password: "${DB_PASSWORD}"
+          
+            redis:
+              host: "${REDIS_HOST}"
+              port: 6379
+          
+          naver:
+            client-id: "${NAVER_CLIENT_ID}"
+            client-secret: "${NAVER_CLIENT_SECRET}"
+          EOT
+            
+                echo "[INFO] Stopping existing Spring Boot application..."
+                PID=\$(pgrep -f 'app.jar')
+                if [ -n "\$PID" ]; then
+                    kill -15 \$PID
+                    echo "[INFO] Sent SIGTERM to PID \$PID"
+                
+                    for i in {1..60}
+                    do
+                      sleep 1
+                      if ! ps -p \$PID > /dev/null; then
+                        echo "[INFO] Process \$PID terminated gracefully"
+                        break
+                      fi
+                      if [ \$i -eq 60 ]; then
+                        echo "[WARN] Process \$PID still running. Sending SIGKILL..."
+                        kill -9 \$PID
+                      fi
+                    done
+                  else
+                    echo "[INFO] No existing app.jar process found"
+                  fi
+                
+                  echo "[INFO] Starting Spring Boot application..."
+                  nohup java -jar -Dspring.profiles.active=prod \
+                    -Dspring.config.additional-location=/home/${USER}/application-secret.yml \
+                    /home/${USER}/app.jar > /home/${USER}/app.log 2>&1 &
+                
+                  echo "[INFO] Deployment complete. Tail logs:"
+                  tail -n 20 /home/${USER}/app.log
+          EOF
+
+      - name: Clean up PEM key
+        run: rm -f ec2_key.pem
