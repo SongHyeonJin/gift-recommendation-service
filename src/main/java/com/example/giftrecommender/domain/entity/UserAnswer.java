@@ -7,11 +7,10 @@ import com.example.giftrecommender.domain.entity.question.Question;
 import com.example.giftrecommender.domain.enums.QuestionType;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
-import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 @Entity
 @Getter
@@ -22,37 +21,37 @@ public class UserAnswer {
     @Column(name = "user_answer_id")
     private Long id;
 
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "guest_id", nullable = false)
     private Guest guest;
 
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "recommendation_session_id", nullable = false)
     private RecommendationSession recommendationSession;
 
     // 고정 질문(1~3번)
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "question_id")
     private Question question;
 
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "answer_option_id")
     private AnswerOption answerOption;
 
     // GPT 기반 질문(4~6번)
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "ai_question_id")
     private AiQuestion aiQuestion;
 
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "ai_answer_option_id")
     private AiAnswerOption aiAnswerOption;
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
+    @Column(nullable = false, length = 20)
     private QuestionType type;
 
-    private LocalDateTime createdAt;
+    private Instant createdAt;
 
     // 고정 질문 생성자
     public UserAnswer(Guest guest, RecommendationSession recommendationSession,
@@ -87,7 +86,7 @@ public class UserAnswer {
 
     @PrePersist
     public void prePersist() {
-        this.createdAt = LocalDateTime.now();
+        this.createdAt = Instant.now();
     }
 
 }
