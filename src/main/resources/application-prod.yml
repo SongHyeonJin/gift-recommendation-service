@@ -1,0 +1,12 @@
+spring:
+  datasource:
+    username: song
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: none
+
+spring-doc:
+  swagger-ui:
+    enabled: true
