@@ -19,11 +19,11 @@ public class AiQuestion {
     @Column(name = "ai_question_id")
     private Long id;
 
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "guest_id", nullable = false)
     private Guest guest;
 
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "recommendation_session_id", nullable = false)
     private RecommendationSession session;
 
@@ -31,7 +31,7 @@ public class AiQuestion {
     private String content;
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
+    @Column(nullable = false, length = 20)
     private QuestionType type;
 
     @Column(name = "question_order", nullable = false)

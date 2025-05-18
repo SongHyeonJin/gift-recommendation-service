@@ -1,14 +1,8 @@
 spring:
   profiles:
     include: secret
-  datasource:
-    url: jdbc:mysql://localhost:3306/gift_recommendation?serverTimezone=Asia/Seoul&characterEncoding=UTF-8
-    username: root
-    driver-class-name: com.mysql.cj.jdbc.Driver
 
   jpa:
-    hibernate:
-      ddl-auto: update
     show-sql: true
     properties:
       hibernate:

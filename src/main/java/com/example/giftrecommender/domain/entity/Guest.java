@@ -9,7 +9,7 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.UUID;
 
 @Entity
@@ -21,21 +21,23 @@ public class Guest {
     @Column(name = "guest_id")
     private UUID id;
 
-    // 생성 시간
-    private LocalDateTime createdAt;
+    // 생성 시간 (UTC)
+    private Instant createdAt;
 
-    // 마지막 접속 시간
-    private LocalDateTime lastAccessedAt;
+    // 마지막 접속 시간 (UTC)
+    private Instant lastAccessedAt;
 
     @Builder
     public Guest(UUID id) {
         this.id = id;
     }
 
+    // 최초 저장 시 자동 세팅
     @PrePersist
     public void prePersist() {
-        this.createdAt = LocalDateTime.now();
-        this.lastAccessedAt = this.createdAt;
+        Instant now = Instant.now();
+        this.createdAt = now;
+        this.lastAccessedAt = now;
     }
 
 }
