@@ -39,7 +39,7 @@ jobs:
       - name: SSH into EC2 and deploy
         env:
           DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
-          REDIS_HOST: ${{ secrets.EC2_HOST }}
+          EC2_HOST: ${{ secrets.EC2_HOST }}
           NAVER_CLIENT_ID: ${{ secrets.NAVER_CLIENT_ID }}
           NAVER_CLIENT_SECRET: ${{ secrets.NAVER_CLIENT_SECRET }}
         run: |
@@ -56,10 +56,11 @@ jobs:
                 on-profile: prod
           
             datasource:
+              url: jdbc:mysql://${EC2_HOST}:3306/gift_recommendation?allowPublicKeyRetrieval=true&useSSL=false&serverTimezone=Asia/Seoul&characterEncoding=UTF-8
               password: "${DB_PASSWORD}"
           
             redis:
-              host: "${REDIS_HOST}"
+              host: "${EC2_HOST}"
               port: 6379
           
           naver:
