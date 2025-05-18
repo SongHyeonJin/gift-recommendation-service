@@ -7,7 +7,7 @@ import com.example.giftrecommender.domain.entity.RecommendationSession;
 import com.example.giftrecommender.domain.enums.SessionStatus;
 import com.example.giftrecommender.domain.repository.GuestRepository;
 import com.example.giftrecommender.domain.repository.RecommendationSessionRepository;
-import com.example.giftrecommender.dto.RecommendationSessionRequestDto;
+import com.example.giftrecommender.dto.request.RecommendationSessionRequestDto;
 import com.example.giftrecommender.dto.response.RecommendationSessionResponseDto;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -36,7 +36,10 @@ public class RecommendationSessionService {
                 .build();
 
         recommendationSessionRepository.save(recommendationSession);
-        return new RecommendationSessionResponseDto(recommendationSession.getId());
+        return new RecommendationSessionResponseDto(
+                recommendationSession.getId(),
+                recommendationSession.getName()
+        );
     }
 
 }

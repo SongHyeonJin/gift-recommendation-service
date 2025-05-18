@@ -16,11 +16,11 @@ public class AiAnswerOption {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "ai_question_id", nullable = false)
     private AiQuestion question;
 
-    @Column(nullable = false, length = 100)
+    @Column(nullable = false, length = 300)
     private String content;
 
     @Column(nullable = false, length = 100)

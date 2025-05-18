@@ -1,4 +1,4 @@
-package com.example.giftrecommender.dto;
+package com.example.giftrecommender.dto.request;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 

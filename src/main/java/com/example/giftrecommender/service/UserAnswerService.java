@@ -37,13 +37,13 @@ public class UserAnswerService {
 
     @Transactional
     public void saveAnswer(UUID guestId, UUID sessionId, UserAnswerRequestDto request) {
-        Guest guest = guestRepository.findById(guestId).orElseThrow(
-                () -> new ErrorException(ExceptionEnum.GUEST_NOT_FOUND)
-        );
+        Guest guest = existsGuest(guestId);
 
-        RecommendationSession session = sessionRepository.findById(sessionId).orElseThrow(
-                () -> new ErrorException(ExceptionEnum.SESSION_NOT_FOUND)
-        );
+        RecommendationSession session = existsRecommendationSession(sessionId);
+
+        if (!session.getGuest().getId().equals(guest.getId())) {
+            throw new ErrorException(ExceptionEnum.FORBIDDEN);
+        }
 
         Question question = questionRepository.findById(request.questionId()).orElseThrow(
                 () -> new ErrorException(ExceptionEnum.QUESTION_NOT_FOUND)
@@ -59,13 +59,13 @@ public class UserAnswerService {
 
     @Transactional
     public void saveAiQuestionAndAnswer(UUID guestId, UUID sessionId, UserAnswerAiRequestDto requestDto) {
-        Guest guest = guestRepository.findById(guestId).orElseThrow(
-                () -> new ErrorException(ExceptionEnum.GUEST_NOT_FOUND)
-        );
+        Guest guest = existsGuest(guestId);
 
-        RecommendationSession session = sessionRepository.findById(sessionId).orElseThrow(
-                () -> new ErrorException(ExceptionEnum.SESSION_NOT_FOUND)
-        );
+        RecommendationSession session = existsRecommendationSession(sessionId);
+
+        if (!session.getGuest().getId().equals(guest.getId())) {
+            throw new ErrorException(ExceptionEnum.FORBIDDEN);
+        }
 
         AiQuestion question = AiQuestion.builder()
                 .guest(guest)
@@ -93,6 +93,18 @@ public class UserAnswerService {
 
         UserAnswer userAnswer = UserAnswer.ofAi(guest, session, question, selectedOption, requestDto.question().type());
         userAnswerRepository.save(userAnswer);
+    }
+
+    private Guest existsGuest(UUID guestId) {
+        return guestRepository.findById(guestId).orElseThrow(
+                () -> new ErrorException(ExceptionEnum.GUEST_NOT_FOUND)
+        );
+    }
+
+    private RecommendationSession existsRecommendationSession(UUID sessionId) {
+        return sessionRepository.findById(sessionId).orElseThrow(
+                () -> new ErrorException(ExceptionEnum.SESSION_NOT_FOUND)
+        );
     }
 
 

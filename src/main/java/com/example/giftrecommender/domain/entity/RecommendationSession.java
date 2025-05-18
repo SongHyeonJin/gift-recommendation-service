@@ -7,31 +7,30 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.UUID;
 
 @Entity
 @Getter
-@NoArgsConstructor(access = AccessLevel.PROTECTED
-)
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class RecommendationSession {
 
     @Id
     @Column(name = "recommendation_session_id")
     private UUID id;
 
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "guest_id", nullable = false)
     private Guest guest;
 
-    @Column(nullable = false)
+    @Column(nullable = false, length = 60)
     private String name;
 
-    private LocalDateTime createdAt;
-    private LocalDateTime endedAt;
+    private Instant createdAt;
+    private Instant endedAt;
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
+    @Column(nullable = false, length = 20)
     private SessionStatus status;
 
     @Builder
@@ -44,7 +43,7 @@ public class RecommendationSession {
 
     @PrePersist
     public void prePersist() {
-        this.createdAt = LocalDateTime.now();
+        this.createdAt = Instant.now();
     }
 
 }
