@@ -81,7 +81,7 @@ jobs:
                         echo "[INFO] Process \$PID terminated gracefully"
                         break
                       fi
-                      echo "[INFO] Waiting for process \$PID to terminate ($i/60)..."
+                      echo "[INFO] Waiting for process \$PID to terminate (\$i/60)..."
                       if [ \$i -eq 60 ]; then
                         echo "[WARN] Process \$PID still running. Sending SIGKILL..."
                         kill -9 \$PID
