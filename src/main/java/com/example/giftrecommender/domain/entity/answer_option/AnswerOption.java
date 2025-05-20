@@ -3,6 +3,7 @@ package com.example.giftrecommender.domain.entity.answer_option;
 import com.example.giftrecommender.domain.entity.question.Question;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
+import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
@@ -25,4 +26,10 @@ public class AnswerOption {
     @JoinColumn(name = "question_id", nullable = false)
     private Question question;
 
+    @Builder
+    public AnswerOption(String content, String recommendationKeyword, Question question) {
+        this.content = content;
+        this.recommendationKeyword = recommendationKeyword;
+        this.question = question;
+    }
 }
