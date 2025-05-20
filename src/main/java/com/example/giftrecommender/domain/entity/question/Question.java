@@ -3,6 +3,7 @@ package com.example.giftrecommender.domain.entity.question;
 import com.example.giftrecommender.domain.enums.QuestionType;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
+import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
@@ -25,4 +26,10 @@ public class Question {
     @Column(name = "question_order", nullable = false)
     private Integer order;
 
+    @Builder
+    public Question(String content, QuestionType type, Integer order) {
+        this.content = content;
+        this.type = type;
+        this.order = order;
+    }
 }
