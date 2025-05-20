@@ -26,7 +26,7 @@ import java.util.List;
 @RequiredArgsConstructor
 public class NaverApiClient {
 
-    private final RestTemplate restTemplate = new RestTemplate();
+    private final RestTemplate restTemplate;
     private final RedisQuotaManager quotaManager;
 
     @Value("${naver.client-id}")
