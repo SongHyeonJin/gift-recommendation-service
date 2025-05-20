@@ -10,3 +10,6 @@ spring:
 spring-doc:
   swagger-ui:
     enabled: true
+
+server:
+  forward-headers-strategy: framework
