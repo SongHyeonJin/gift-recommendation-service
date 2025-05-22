@@ -10,5 +10,4 @@ public interface KeywordGroupRepository extends JpaRepository<KeywordGroup, Long
 
     List<KeywordGroup> findByMainKeywordIn(List<String> mainKeywords);
 
-    Optional<KeywordGroup> findByMainKeyword(String mainKeyword);
 }

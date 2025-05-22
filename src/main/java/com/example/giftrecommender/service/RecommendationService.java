@@ -90,7 +90,10 @@ public class RecommendationService {
                 .build());
 
         List<RecommendationProduct> recs = finalProducts.stream()
-                .map(p -> new RecommendationProduct(result, p))
+                .map(p -> RecommendationProduct.builder()
+                        .recommendationResult(result)
+                        .product(p)
+                        .build())
                 .toList();
         recommendationProductRepository.saveAll(recs);
 
