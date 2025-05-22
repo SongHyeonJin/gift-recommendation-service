@@ -43,8 +43,4 @@ public class RedisQuotaManager {
         log.info("네이버 API 쿼터 초기화 완료");
     }
 
-    public long getCallCount() {
-        String raw = redisTemplate.opsForValue().get(KEY);
-        return raw != null ? Long.parseLong(raw) : 0L;
-    }
 }
