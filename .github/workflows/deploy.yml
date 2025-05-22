@@ -29,12 +29,13 @@ jobs:
           echo "${{ secrets.EC2_KEY }}" > ec2_key.pem
           chmod 600 ec2_key.pem
 
-      - name: Copy JAR to EC2
+      - name: Copy JAR and application-secret.yml to EC2
         run: |
           scp -i ec2_key.pem \
             -o StrictHostKeyChecking=no \
             build/libs/giftrecommender-0.0.1-SNAPSHOT.jar \
-            ${{ secrets.EC2_USERNAME }}@${{ secrets.EC2_HOST }}:/home/${{ secrets.EC2_USERNAME }}/giftrecommender-0.0.1-SNAPSHOT.jar
+            src/main/resources/application-secret.yml \
+            ${{ secrets.EC2_USERNAME }}@${{ secrets.EC2_HOST }}:/home/${{ secrets.EC2_USERNAME }}/
 
       - name: SSH into EC2 and deploy
         env:
