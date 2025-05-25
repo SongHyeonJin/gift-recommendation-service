@@ -59,6 +59,7 @@ class RecommendationControllerTest {
                 99000,
                 "https://example.com/product/1",
                 "https://example.com/image.jpg",
+                "mall",
                 List.of("악세서리", "반지", "금")
         );
 
@@ -92,6 +93,7 @@ class RecommendationControllerTest {
                 99000,
                 "https://example.com/product/1",
                 "https://example.com/image.jpg",
+                "mall",
                 List.of("악세서리", "반지", "금")
         );
 
