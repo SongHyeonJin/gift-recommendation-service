@@ -21,6 +21,11 @@ jobs:
       - name: Grant execute permission for Gradle wrapper
         run: chmod +x ./gradlew
 
+      - name: Create application-secret.yml
+        run: |
+          mkdir -p src/main/resources
+          echo "${{ secrets.APPLICATION_SECRET_YML }}" > src/main/resources/application-secret.yml
+
       - name: Build with Gradle
         run: ./gradlew clean build
 

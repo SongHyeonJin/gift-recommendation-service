@@ -8,10 +8,10 @@ public class RecommendationUtil {
     // 브랜드 추출
     public static String extractBrand(String title, String mallName) {
         String lower = title.toLowerCase();
-        if (lower.contains("삼성")) return "삼성";
+        if (lower.contains("삼성")|| lower.contains("samsung")) return "삼성";
         if (lower.contains("apple") || lower.contains("애플")) return "애플";
         if (lower.contains("sony") || lower.contains("소니")) return "소니";
-        if (lower.contains("lg")) return "LG";
+        if (lower.contains("lg") || lower.contains("엘지")) return "LG";
         return mallName;
     }
 
@@ -82,5 +82,13 @@ public class RecommendationUtil {
             comboRec(tags, i + 1, r, cur, out, receiver, reason);
             cur.remove(cur.size() - 1);
         }
+    }
+
+    public static String extractBaseTitle(String title) {
+        return title.replaceAll("\\(.*?\\)", "") // 괄호 제거
+                .replaceAll("\\d+(호|mm|ml|g|cm|개)?", "") // 사이즈/숫자 패턴 제거
+                .replaceAll("[^가-힣a-zA-Z0-9 ]", "") // 특수문자 제거
+                .trim()
+                .toLowerCase();
     }
 }

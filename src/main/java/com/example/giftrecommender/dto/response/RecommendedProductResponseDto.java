@@ -12,6 +12,7 @@ public record RecommendedProductResponseDto(
         int price,
         String link,
         String imageUrl,
+        String mallName,
         List<String> keywords
 ) {
     public static RecommendedProductResponseDto from(Product product) {
@@ -25,6 +26,7 @@ public record RecommendedProductResponseDto(
                 product.getPrice(),
                 product.getLink(),
                 product.getImageUrl(),
+                product.getMallName(),
                 keywordTags
         );
     }

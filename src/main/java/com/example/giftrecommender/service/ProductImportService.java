@@ -57,7 +57,8 @@ public class ProductImportService {
         Set<String> searched = new HashSet<>();
         Set<String> seenTitles = new HashSet<>();
         List<Product> toSave = new ArrayList<>();
-        Map<String, Product> priceFilteredBrandMap = new LinkedHashMap<>();
+        Map<String, Product> distinctKeyMap = new LinkedHashMap<>();
+        Set<String> brandSet = new HashSet<>();
 
         if (combos.size() > MAX_COMBOS) {
             combos = combos.subList(0, MAX_COMBOS);
@@ -96,12 +97,18 @@ public class ProductImportService {
                         log.info("가격 필터 통과: {}", p.getPrice());
 
                         String brand = RecommendationUtil.extractBrand(p.getTitle(), p.getMallName());
-                        priceFilteredBrandMap.putIfAbsent(brand, p);
+                        String baseTitle = RecommendationUtil.extractBaseTitle(p.getTitle());
+                        String key = baseTitle + "::" + p.getImageUrl();
 
-                        if (priceFilteredBrandMap.size() >= neededCount) {
+                        if (brandSet.contains(brand)) continue;
+
+                        brandSet.add(brand);
+                        distinctKeyMap.putIfAbsent(key, p);
+
+                        if (distinctKeyMap.size() >= neededCount) {
                             productRepository.saveAll(toSave);
-                            log.info("저장 완료 - 브랜드 필터 통과: {}, 가격 필터 통과: {}",
-                                    priceFilteredBrandMap.size(), countPriceMatched(toSave, priceKeyword));
+                            log.info("저장 완료 - 고유 상품 수: {}, 가격 필터 통과: {}",
+                                    distinctKeyMap.size(), countPriceMatched(toSave, priceKeyword));
                             return;
                         }
                     }
