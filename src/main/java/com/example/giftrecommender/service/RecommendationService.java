@@ -134,7 +134,7 @@ public class RecommendationService {
                         return keywords.equals(comboSet);
                     })
                     .toList();
-            List<Product> exactDistinct = pickDistinctBrandsExactly(exactMatch, 4);
+            List<Product> exactDistinct = pickDistinctProductsExactly(exactMatch, 4);
             if (!exactDistinct.isEmpty()) return exactDistinct;
 
             // 2. 완전 포함 (모든 키워드 포함) && 태그 수 작거나 같음
@@ -146,7 +146,7 @@ public class RecommendationService {
                         return keywords.containsAll(comboSet) && keywords.size() <= comboSet.size();
                     })
                     .toList();
-            List<Product> partialDistinct = pickDistinctBrandsExactly(partialMatch, 4);
+            List<Product> partialDistinct = pickDistinctProductsExactly(partialMatch, 4);
             if (!partialDistinct.isEmpty()) return partialDistinct;
 
             // 3. 유사도 70% 이상 && 태그 수 작거나 같음
@@ -160,7 +160,7 @@ public class RecommendationService {
                         return similarity >= 0.7 && keywords.size() <= comboSet.size();
                     })
                     .toList();
-            List<Product> relaxedDistinct = pickDistinctBrandsExactly(relaxedMatch, 4);
+            List<Product> relaxedDistinct = pickDistinctProductsExactly(relaxedMatch, 4);
             if (!relaxedDistinct.isEmpty()) return relaxedDistinct;
         }
 
@@ -185,20 +185,29 @@ public class RecommendationService {
         return totalKeywords.containsAll(combo);
     }
 
-    private List<Product> pickDistinctBrandsExactly(List<Product> products, int needCount) {
-        Map<String, Product> brandMap = new LinkedHashMap<>();
+    private List<Product> pickDistinctProductsExactly(List<Product> products, int needCount) {
+        Map<String, Product> uniqueMap = new LinkedHashMap<>();
+        Set<String> brandSet = new HashSet<>();
 
         for (Product p : products) {
             String brand = RecommendationUtil.extractBrand(p.getTitle(), p.getMallName());
-            if (!brandMap.containsKey(brand)) {
-                brandMap.put(brand, p);
-            }
-            if (brandMap.size() > needCount) break;
+            String baseTitle = RecommendationUtil.extractBaseTitle(p.getTitle());
+
+            String key = baseTitle + "::" + p.getImageUrl();
+
+            if (brandSet.contains(brand)) continue;
+            if (uniqueMap.containsKey(key)) continue;
+
+            brandSet.add(brand);
+            uniqueMap.put(key, p);
+
+            if (uniqueMap.size() >= needCount) break;
         }
 
-        return brandMap.size() == needCount ? new ArrayList<>(brandMap.values()) : Collections.emptyList();
+        return uniqueMap.size() >= needCount
+                ? new ArrayList<>(uniqueMap.values())
+                : Collections.emptyList();
     }
-
 
     private Guest existsGuest(UUID id) {
         return guestRepository.findById(id)
