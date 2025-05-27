@@ -82,6 +82,10 @@ public class RecommendationService {
                 log.info("{} | {}원 | 태그={}", p.getTitle(), p.getPrice(),
                         p.getKeywordGroups().stream().map(KeywordGroup::getMainKeyword).toList()));
 
+        if (finalProducts.isEmpty()) {
+            throw new ErrorException(ExceptionEnum.RECOMMENDATION_EMPTY);
+        }
+
         // 6. 결과 저장
         RecommendationResult result = resultRepository.save(RecommendationResult.builder()
                 .guest(guest)
