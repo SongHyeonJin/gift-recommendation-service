@@ -18,7 +18,8 @@ class ProductTest {
     @Test
     void testFromDto() {
         // given
-        ProductResponseDto dto = new ProductResponseDto(UUID.randomUUID(), "title <b>bold</b>", "link", "image", 10000, "mall");
+        ProductResponseDto dto = new ProductResponseDto(UUID.randomUUID(), "title <b>bold</b>", "link",
+                "image", 10000, "mall", "브랜드", "카테고리");
         List<KeywordGroup> keywords = List.of(new KeywordGroup("여자친구"));
 
         // when

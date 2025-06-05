@@ -54,7 +54,9 @@ class ProductImportServiceTest {
                 "https://example.com/product1",
                 "https://example.com/image1.jpg",
                 89000,
-                "쿠팡"
+                "쿠팡",
+                "브랜드",
+                "카테고리"
         );
 
         when(naverApiClient.search(anyString(), eq(1), eq(100)))
