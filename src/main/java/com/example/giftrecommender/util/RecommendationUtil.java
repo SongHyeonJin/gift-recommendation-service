@@ -1,94 +1,100 @@
 package com.example.giftrecommender.util;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 public class RecommendationUtil {
-
-    // 브랜드 추출
-    public static String extractBrand(String title, String mallName) {
-        String lower = title.toLowerCase();
-        if (lower.contains("삼성")|| lower.contains("samsung")) return "삼성";
-        if (lower.contains("apple") || lower.contains("애플")) return "애플";
-        if (lower.contains("sony") || lower.contains("소니")) return "소니";
-        if (lower.contains("lg") || lower.contains("엘지")) return "LG";
-        return mallName;
-    }
-
     /*
-     * receiver(예: “여자친구”)
-     * reason(예: “생일”, “기념일”)
-     * tags(예: “우아한”, “악세서리”, “목걸이”)
-     * 1) [tags(r개) + receiver + reason]
-     * 2) [tags(r개) + receiver]
-     * 3) [tags(r개) + reason]
-     * 4) [tags(r개)]
-     * 순서로 내림차순(r = tags.size() → 2) 조합 생성
+     * 추천 조합 우선순위 생성 로직
+     *
+     * 입력 예:
+     * - receiver: "여자친구"
+     * - reason: "생일"
+     * - tags: ["우아한", "악세서리", "목걸이"]
+     *
+     * 조합 생성 순서 (우선순위 높은 순):
+     * 1) [receiver + tag 1개 + reason]
+     * 2) [receiver + tag 2개 + reason]
+     * ...
+     * n) [receiver + tag n개 + reason]
+     * 마지막) [receiver + reason] (태그가 없을 때 fallback)
+     *
+     * 각 조합은 DB 키워드 검색 등에 사용됨
      */
     public static List<List<String>> generatePriorityCombos(List<String> tags, String receiver, String reason) {
         List<List<String>> result = new ArrayList<>();
+
         int n = tags.size();
-
-        // 태그 조합 (r개씩 - 가장 구체적인 것부터)
-        for (int r = n; r >= 2; r--) {
-            comboRec(tags, 0, r, new ArrayList<>(), result, receiver, reason);
+        // 1개부터 n개까지 조합
+        for (int r = 1; r <= n; r++) {
+            List<List<String>> combinations = new ArrayList<>();
+            generateCombinations(tags, 0, r, new ArrayList<>(), combinations);
+            for (List<String> tagCombo : combinations) {
+                List<String> combo = new ArrayList<>();
+                if (!receiver.isBlank()) combo.add(receiver);
+                combo.addAll(tagCombo);
+                if (!reason.isBlank()) combo.add(reason);
+                result.add(combo);
+            }
         }
 
-        // 태그가 1개뿐인 경우도 보장 (예외적 상황)
-        if (n == 1) {
-            comboRec(tags, 0, 1, new ArrayList<>(), result, receiver, reason);
-        }
-
-        // 마지막 fallback: 대상자 + 이유 (태그 없이)
-        if (tags.size() <= 1 && !receiver.isBlank() && !reason.isBlank()) {
+        // 태그 없고 receiver, reason만 있을 때 fallback
+        if (tags.isEmpty() && !receiver.isBlank() && !reason.isBlank()) {
             result.add(List.of(receiver, reason));
         }
 
         return result;
     }
 
-    private static void comboRec(List<String> tags, int start, int r, List<String> cur,
-                          List<List<String>> out, String receiver, String reason) {
+    // 조합 생성
+    private static void generateCombinations(List<String> tags, int start, int r,
+                                             List<String> cur, List<List<String>> out) {
         if (cur.size() == r) {
-            // 1) 태그 + 대상자 + 이유
-            if (!receiver.isBlank() && !reason.isBlank()) {
-                List<String> combo = new ArrayList<>(cur);
-                combo.add(receiver);
-                combo.add(reason);
-                out.add(combo);
-            }
-
-            // 2) 태그 + 대상자
-            if (!receiver.isBlank()) {
-                List<String> combo = new ArrayList<>(cur);
-                combo.add(receiver);
-                out.add(combo);
-            }
-
-            // 3) 태그 + 이유
-            if (!reason.isBlank()) {
-                List<String> combo = new ArrayList<>(cur);
-                combo.add(reason);
-                out.add(combo);
-            }
-
-            // 4) 태그만
             out.add(new ArrayList<>(cur));
             return;
         }
-
         for (int i = start; i < tags.size(); i++) {
             cur.add(tags.get(i));
-            comboRec(tags, i + 1, r, cur, out, receiver, reason);
+            generateCombinations(tags, i + 1, r, cur, out);
             cur.remove(cur.size() - 1);
         }
     }
 
+    /*
+     * 상품 제목 전처리 로직
+     * - 불필요한 특수 문자, 단위, 괄호 등 제거
+     * - 유사한 상품 이름 비교를 위한 정규화 처리
+     */
     public static String extractBaseTitle(String title) {
-        return title.replaceAll("\\(.*?\\)", "") // 괄호 제거
-                .replaceAll("\\d+(호|mm|ml|g|cm|개)?", "") // 사이즈/숫자 패턴 제거
-                .replaceAll("[^가-힣a-zA-Z0-9 ]", "") // 특수문자 제거
+        return title
+                .replaceAll("\\[[^\\]]*\\]", "") // 대괄호 제거: [정품], [BTS 에디션]
+                .replaceAll("\\([^)]*\\)", "") // 괄호 제거: (화이트)
+                .replaceAll("[-_•·|]", " ") // 특수구분자 -> 공백
+                .replaceAll("\\d+(호|mm|ml|g|kg|cm|개|세트|pack|팩)?", "") // 단위 포함 숫자 제거
+                .replaceAll("[^가-힣a-zA-Z0-9 ]", "") // 나머지 특수문자 제거
+                .replaceAll("\\s{2,}", " ") // 다중 공백 제거
                 .trim()
                 .toLowerCase();
+    }
+
+    /*
+     * Jaccard 유사도 측정 (단어 기준)
+     * - 상품 제목을 단어 단위로 나누어 유사도 측정
+     * - 유사도 = 교집합 크기 / 합집합 크기
+     * - 유사한 상품 추천 시 중복 판단에 사용
+     */
+    public static double jaccardSimilarityByWords(String title1, String title2) {
+        Set<String> words1 = new HashSet<>(List.of(title1.split("\\s+")));
+        Set<String> words2 = new HashSet<>(List.of(title2.split("\\s+")));
+
+        Set<String> intersection = new HashSet<>(words1);
+        intersection.retainAll(words2);
+
+        Set<String> union = new HashSet<>(words1);
+        union.addAll(words2);
+
+        return union.isEmpty() ? 0.0 : (double) intersection.size() / union.size();
     }
 }
