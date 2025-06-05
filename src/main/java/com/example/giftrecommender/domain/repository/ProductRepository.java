@@ -11,11 +11,18 @@ import java.util.Set;
 
 public interface ProductRepository extends JpaRepository<Product, Long> {
 
-    @Query("SELECT p FROM Product p JOIN p.keywordGroups kg WHERE kg.mainKeyword IN :keywords AND p.price BETWEEN :min AND :max")
+    @Query("""
+                SELECT p FROM Product p
+                JOIN p.keywordGroups kg
+                WHERE kg.mainKeyword IN :keywords
+                  AND p.price BETWEEN :minPrice AND :maxPrice
+                GROUP BY p
+                HAVING COUNT(DISTINCT kg.mainKeyword) >= 3
+            """)
     List<Product> findTopByTagsAndPriceRange(
             @Param("keywords") List<String> keywords,
-            @Param("min") int min,
-            @Param("max") int max
+            @Param("minPrice") int minPrice,
+            @Param("maxPrice") int maxPrice
     );
 
     @Query("SELECT p.link FROM Product p WHERE p.link IN :links")

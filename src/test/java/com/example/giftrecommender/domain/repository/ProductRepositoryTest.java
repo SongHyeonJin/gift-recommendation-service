@@ -36,12 +36,14 @@ class ProductRepositoryTest {
     @Test
     void findTopByTagsAndPriceRange() {
         // given
-        KeywordGroup kg = keywordGroupRepository.save(new KeywordGroup("운동"));
-        Product product = createProduct("제목", "링크", "image1", 50000, "mall", List.of(kg));
+        KeywordGroup kg1 = keywordGroupRepository.save(new KeywordGroup("운동"));
+        KeywordGroup kg2 = keywordGroupRepository.save(new KeywordGroup("러닝화"));
+        KeywordGroup kg3 = keywordGroupRepository.save(new KeywordGroup("러닝가방"));
+        Product product = createProduct("제목", "링크", "image1", 50000, "mall", List.of(kg1, kg2, kg3));
         productRepository.save(product);
 
         // when
-        List<Product> result = productRepository.findTopByTagsAndPriceRange(List.of("운동"), 30000, 60000);
+        List<Product> result = productRepository.findTopByTagsAndPriceRange(List.of("운동", "러닝화", "러닝가방"), 30000, 60000);
 
         // then
         assertThat(result).hasSize(1).extracting(Product::getTitle).contains("제목");

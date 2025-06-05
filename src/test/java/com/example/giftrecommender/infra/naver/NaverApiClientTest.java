@@ -73,7 +73,9 @@ class NaverApiClientTest {
               "link": "http://example.com",
               "image": "http://example.com/image.jpg",
               "lprice": "12345",
-              "mallName": "테스트몰"
+              "mallName": "테스트몰",
+              "brand": "브랜드",
+              "category3": "카테고리"
             }
           ]
         }

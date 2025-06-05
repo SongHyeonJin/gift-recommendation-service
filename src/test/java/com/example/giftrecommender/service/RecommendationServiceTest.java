@@ -62,24 +62,38 @@ class RecommendationServiceTest {
         recommendationSession = createRecommendationSession("테스트", guest);
         recommendationSessionRepository.save(recommendationSession);
 
-        KeywordGroup k1 = new KeywordGroup("연인");
-        KeywordGroup k2 = new KeywordGroup("생일");
-        KeywordGroup k3 = new KeywordGroup("악세서리");
-        KeywordGroup k4 = new KeywordGroup("반지");
-        KeywordGroup k5 = new KeywordGroup("금");
-        keywordGroupRepository.saveAll(List.of(k1, k2, k3, k4, k5));
+        // 키워드 저장
+        KeywordGroup girlfriend = keywordGroupRepository.save(new KeywordGroup("여자친구"));
+        KeywordGroup birthday = keywordGroupRepository.save(new KeywordGroup("생일"));
+        KeywordGroup moodlight = keywordGroupRepository.save(new KeywordGroup("무드등"));
+        KeywordGroup ring = keywordGroupRepository.save(new KeywordGroup("반지"));
+        KeywordGroup gold = keywordGroupRepository.save(new KeywordGroup("금"));
 
-        for (int i = 1; i <= 4; i++) {
-            products.add(
-                    createProduct(
-                            "악세서리 반지 금 여자친구 생일",
-                            "https://example.com/" + i,
-                            "https://img.com/" + i + ".jpg",
-                            90000,
-                            "브랜드" + i,
-                            List.of(k1, k2, k3, k4, k5))
-            );
-        }
+        // 조합1: ["여자친구","무드등","생일"]
+        products.add(createProduct("스텔라 라이트 오브제", "https://ex.com/1", "https://img.com/1.jpg", 95000, "빛의정원", "라이트하우스", List.of(girlfriend, moodlight, birthday)));
+        products.add(createProduct("드림캐처 별빛 조명", "https://ex.com/2", "https://img.com/2.jpg", 93000, "힐링하우스", "별조명코리아", List.of(girlfriend, moodlight, birthday)));
+        products.add(createProduct("밤하늘 테이블 램프", "https://ex.com/3", "https://img.com/3.jpg", 97000, "조명마을", "무드펄", List.of(girlfriend, moodlight, birthday)));
+
+        // 조합2: ["여자친구","반지","생일"]
+        products.add(createProduct("러브메탈 핑크링", "https://ex.com/4", "https://img.com/4.jpg", 94000, "러브링스몰", "러브링스", List.of(girlfriend, ring, birthday)));
+        products.add(createProduct("메르시 볼드링", "https://ex.com/5", "https://img.com/5.jpg", 95000, "모던쥬얼", "메르시", List.of(girlfriend, ring, birthday)));
+        products.add(createProduct("심장박동 골드링", "https://ex.com/6", "https://img.com/6.jpg", 96000, "하트골드샵", "골드하트", List.of(girlfriend, ring, birthday)));
+
+        // 조합3: ["여자친구","금","생일"]
+        products.add(createProduct("클래식 진주 드롭귀걸이", "https://ex.com/7", "https://img.com/7.jpg", 96000, "로즈앤골드", "클래식뷰", List.of(girlfriend, gold, birthday)));
+        products.add(createProduct("헬렌 체인 뱅글", "https://ex.com/8", "https://img.com/8.jpg", 98000, "골드하임", "헬렌주얼리", List.of(girlfriend, gold, birthday)));
+        products.add(createProduct("루체아 로즈 팬던트", "https://ex.com/9", "https://img.com/9.jpg", 97000, "핑크주얼", "루체아", List.of(girlfriend, gold, birthday)));
+
+        // 조합4: ["여자친구","무드등","반지","생일"]
+        products.add(createProduct("피오레 파스텔 세트", "https://ex.com/10", "https://img.com/10.jpg", 95000, "조이쥬얼", "피오레라", List.of(girlfriend, moodlight, ring, birthday)));
+        products.add(createProduct("미드나잇 앤써 링박스", "https://ex.com/11", "https://img.com/11.jpg", 94000, "빛앤링", "앤써링", List.of(girlfriend, moodlight, ring, birthday)));
+        products.add(createProduct("글로우 뷰티 조명키트", "https://ex.com/12", "https://img.com/12.jpg", 96000, "예쁜반지샵", "글로우존", List.of(girlfriend, moodlight, ring, birthday)));
+
+        // 조합5: ["여자친구","무드등","금","생일"]
+        products.add(createProduct("라파엘로 캔들보틀", "https://ex.com/13", "https://img.com/13.jpg", 97000, "골드앤라이트", "라파엘로", List.of(girlfriend, moodlight, gold, birthday)));
+        products.add(createProduct("루미에르 스톤 목걸이", "https://ex.com/14", "https://img.com/14.jpg", 99000, "다이아주얼", "루미에르", List.of(girlfriend, moodlight, gold, birthday)));
+        products.add(createProduct("플레르 노블 링세트", "https://ex.com/15", "https://img.com/15.jpg", 96000, "럭스골드", "플레르", List.of(girlfriend, moodlight, gold, birthday)));
+
         productRepository.saveAll(products);
     }
 
@@ -93,11 +107,11 @@ class RecommendationServiceTest {
         guestRepository.deleteAllInBatch();
     }
 
-    @DisplayName("조건에 맞는 상품이 있을 경우 추천 결과  4개가 성공적으로 반환된다.")
+    @DisplayName("조건에 맞는 상품이 있을 경우 추천 결과  10개가 성공적으로 반환된다.")
     @Test
     void recommendationResultProductsExist() {
         // given
-        List<String> keywords = List.of("여자친구", "5~10만원", "생일", "악세서리", "반지", "금");
+        List<String> keywords = List.of("여자친구", "5~10만원", "생일", "무드등", "반지", "금");
         when(redisQuotaManager.canCall()).thenReturn(true);
 
         // when
@@ -106,10 +120,7 @@ class RecommendationServiceTest {
 
         // then
         assertThat(response).isNotNull();
-        assertThat(response.products()).hasSize(4);
-        assertThat(response.products()).allSatisfy(product ->
-                assertThat(product.title()).contains("반지")
-        );
+        assertThat(response.products()).hasSize(10);
     }
 
     @DisplayName("추천 결과 조회가 정상적으로 동작한다")
@@ -119,7 +130,7 @@ class RecommendationServiceTest {
         RecommendationResult result = recommendationResultRepository.save(RecommendationResult.builder()
                 .guest(guest)
                 .recommendationSession(recommendationSession)
-                .keywords(List.of("악세서리", "반지", "금", "여자친구", "생일"))
+                .keywords(List.of("여자친구", "무드등", "반지", "금", "생일"))
                 .build());
 
         recommendationProductRepository.save(
@@ -137,7 +148,7 @@ class RecommendationServiceTest {
         assertThat(response).isNotNull();
         assertThat(response.name()).isEqualTo("테스트");
         assertThat(response.products()).hasSize(1);
-        assertThat(response.products().get(0).title()).contains("반지");
+        assertThat(response.products().get(0).title()).contains("오브제");
     }
 
     @Test
@@ -184,8 +195,9 @@ class RecommendationServiceTest {
     @DisplayName("쿼터 초과 시 예외가 발생한다.")
     void quotaExceeded() {
         // given
+        productRepository.deleteAll();
         when(redisQuotaManager.canCall()).thenReturn(false);
-        List<String> keywords = List.of("여자친구", "5~10만원", "생일", "악세서리", "반지", "금");
+        List<String> keywords = List.of("여자친구", "5~10만원", "생일", "무드등", "반지", "금");
 
         // when  then
         assertThatThrownBy(
@@ -205,7 +217,8 @@ class RecommendationServiceTest {
     }
 
     private static Product createProduct(String title, String link, String imageUrl,
-                                         Integer price, String mall, List<KeywordGroup> keywordGroups) {
+                                         Integer price, String mall, String brand,
+                                         List<KeywordGroup> keywordGroups) {
         return Product.builder()
                 .publicId(UUID.randomUUID())
                 .title(title)
@@ -213,9 +226,11 @@ class RecommendationServiceTest {
                 .imageUrl(imageUrl)
                 .price(price)
                 .mallName(mall)
+                .brand(brand)
                 .keywordGroups(keywordGroups)
                 .build();
     }
+
 
 
     private static RecommendationSession createRecommendationSession(String name, Guest guest) {

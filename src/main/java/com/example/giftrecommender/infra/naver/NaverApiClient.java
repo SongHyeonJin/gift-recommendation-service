@@ -77,7 +77,9 @@ public class NaverApiClient {
                     item.get("link").asText(),
                     item.get("image").asText(),
                     item.get("lprice").asInt(),
-                    item.get("mallName").asText()
+                    item.get("mallName").asText(),
+                    item.has("brand") ? item.get("brand").asText() : null,
+                    item.has("category3") ? item.get("category3").asText() : null
             ));
         }
 

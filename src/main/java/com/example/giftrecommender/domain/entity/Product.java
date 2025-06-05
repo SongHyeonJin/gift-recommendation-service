@@ -40,6 +40,12 @@ public class Product {
     @Column(nullable = false, length = 100)
     private String mallName;
 
+    @Column(length = 100)
+    private String brand;
+
+    @Column(length = 100)
+    private String category3;
+
     // 저장 시점 (TTL 관리 목적)
     private Instant cachedAt;
 
@@ -53,7 +59,8 @@ public class Product {
 
     @Builder
     public Product(UUID publicId, String title, String link, String imageUrl,
-                   Integer price, String mallName, List<KeywordGroup> keywordGroups) {
+                   Integer price, String mallName, List<KeywordGroup> keywordGroups,
+                   String brand, String category3) {
         this.publicId = publicId;
         this.title = title;
         this.link = link;
@@ -61,6 +68,8 @@ public class Product {
         this.price = price;
         this.mallName = mallName;
         this.keywordGroups = keywordGroups;
+        this.brand = brand;
+        this.category3 = category3;
     }
 
     public static Product from(ProductResponseDto dto, List<KeywordGroup> keywordGroups) {
@@ -71,6 +80,8 @@ public class Product {
                 .price(dto.lprice())
                 .mallName(dto.mallName())
                 .keywordGroups(keywordGroups)
+                .brand(dto.brand())
+                .category3(dto.category3())
                 .build();
     }
 
