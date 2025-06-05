@@ -28,15 +28,15 @@ public class ProductImportService {
     @Transactional
     public void importUntilEnough(List<String> tagKeywords, String priceKeyword, String receiverKeyword,
                                   String reasonKeyword, int neededCount) {
-        if (tagKeywords == null || tagKeywords.size() < 2) {
-            log.warn("태그 키워드는 2개 이상 필요합니다.");
+        if (tagKeywords == null || tagKeywords.isEmpty()) {
+            log.warn("태그 키워드는 1개 이상 필요합니다.");
             return;
         }
 
         // 1. KeywordGroup 미리 저장
         List<String> allKeywords = new ArrayList<>(tagKeywords);
         if (!receiverKeyword.isBlank()) allKeywords.add(receiverKeyword);
-        if (!reasonKeyword.isBlank())   allKeywords.add(reasonKeyword);
+        if (!reasonKeyword.isBlank()) allKeywords.add(reasonKeyword);
 
         List<KeywordGroup> groups = keywordGroupRepository.findByMainKeywordIn(allKeywords);
         Set<String> exist = groups.stream()
@@ -63,28 +63,33 @@ public class ProductImportService {
         if (combos.size() > MAX_COMBOS) {
             combos = combos.subList(0, MAX_COMBOS);
         }
+        Map<String, Integer> comboSavedCount = new HashMap<>();
+        int maxPerCombo = 2;
 
         for (List<String> combo : combos) {
             String query = String.join(" ", combo);
             if (!searched.add(query)) continue;
 
             log.info("검색 콤보: '{}'", query);
+
             for (int page = 1; page <= 10; page++) {
                 log.info("API 호출: '{}', page={}", query, page);
                 List<ProductResponseDto> items = naverApiClient.search(query, page, 100);
                 if (items.isEmpty()) break;
 
-                Set<String> links = items.stream()
-                        .map(ProductResponseDto::link)
-                        .collect(Collectors.toSet());
+                Set<String> links = items.stream().map(ProductResponseDto::link).collect(Collectors.toSet());
                 Set<String> existingLinks = productRepository.findLinksIn(links);
 
                 for (ProductResponseDto dto : items) {
-                    // 이미 DB에 있는 링크면 skip
                     if (existingLinks.contains(dto.link())) continue;
-
-                    //  제목이 이미 처리된 적 있으면 skip
                     if (!seenTitles.add(dto.title())) continue;
+
+                    List<String> forbiddenWords = List.of("유아", "아동", "키즈", "어린이", "아이", "장난감", "초등", "유치원", "베이비");
+                    String lowerTitle = dto.title().toLowerCase();
+                    if (forbiddenWords.stream().anyMatch(lowerTitle::contains)) {
+                        log.debug("유아/아동 상품 제외: {}", dto.title());
+                        continue;
+                    }
 
                     List<KeywordGroup> matched = groups.stream()
                             .filter(g -> combo.contains(g.getMainKeyword()))
@@ -94,27 +99,36 @@ public class ProductImportService {
                     toSave.add(p);
 
                     if (matchesPrice(p.getPrice(), priceKeyword)) {
-                        log.info("가격 필터 통과: {}", p.getPrice());
-
-                        String brand = RecommendationUtil.extractBrand(p.getTitle(), p.getMallName());
+                        String brand = p.getBrand();
                         String baseTitle = RecommendationUtil.extractBaseTitle(p.getTitle());
                         String key = baseTitle + "::" + p.getImageUrl();
 
-                        if (brandSet.contains(brand)) continue;
+                        boolean isSimilar = distinctKeyMap.keySet().stream().anyMatch(existingKey -> {
+                            String existingTitle = existingKey.split("::")[0];
+                            double sim = RecommendationUtil.jaccardSimilarityByWords(existingTitle, baseTitle);
+                            return sim >= 0.9;
+                        });
+
+                        if (brandSet.contains(brand) || isSimilar) continue;
+
+                        int savedCount = comboSavedCount.getOrDefault(query, 0);
+                        if (savedCount >= maxPerCombo) continue;
 
                         brandSet.add(brand);
                         distinctKeyMap.putIfAbsent(key, p);
-
-                        if (distinctKeyMap.size() >= neededCount) {
-                            productRepository.saveAll(toSave);
-                            log.info("저장 완료 - 고유 상품 수: {}, 가격 필터 통과: {}",
-                                    distinctKeyMap.size(), countPriceMatched(toSave, priceKeyword));
-                            return;
-                        }
+                        comboSavedCount.put(query, savedCount + 1);
                     }
                 }
-                if (items.size() < 100) break;
+
+                if (distinctKeyMap.size() >= neededCount) break;
             }
+            if (distinctKeyMap.size() >= neededCount) break;
+        }
+
+        if (!toSave.isEmpty()) {
+            productRepository.saveAll(toSave);
+            log.info("저장 완료 - 전체 수집: {}, 가격 필터 통과된 고유 상품 수: {}",
+                    toSave.size(), distinctKeyMap.size());
         }
     }
 
