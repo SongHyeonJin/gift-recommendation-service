@@ -69,11 +69,11 @@ public class RecommendationService {
 
         // 5. 조합 키워드 누락 또는 결과 부족 시 외부 API 보강
         boolean keywordMismatch = !finalProducts.isEmpty() && !containsAllComboKeywords(finalProducts, combos.get(0));
-        if (finalProducts.size() < 4 || keywordMismatch) {
+        if (finalProducts.size() < 10 || keywordMismatch) {
             if (!quotaManager.canCall()) {
                 throw new ErrorException(ExceptionEnum.QUOTA_EXCEEDED);
             }
-            productService.importUntilEnough(tagKeywords, priceKeyword, receiverKeyword, reasonKeyword, 4);
+            productService.importUntilEnough(tagKeywords, priceKeyword, receiverKeyword, reasonKeyword, 10);
             finalProducts = findBestMatched(combos, minPrice, maxPrice);
         }
 
@@ -125,50 +125,45 @@ public class RecommendationService {
     }
 
     private List<Product> findBestMatched(List<List<String>> combos, int minPrice, int maxPrice) {
+        List<Product> allResults = new ArrayList<>();
+        Set<String> seenProductKeys = new HashSet<>();
+        Set<String> seenBrands = new HashSet<>();
+
+        int maxTotal = 10;
+        int maxPerCombo = 2;
+
         for (List<String> combo : combos) {
+            if (allResults.size() >= maxTotal) break;
+
             List<Product> candidates = productRepository.findTopByTagsAndPriceRange(combo, minPrice, maxPrice);
             Set<String> comboSet = new HashSet<>(combo);
 
-            // 1. 완전 일치 (키워드 동일)
-            List<Product> exactMatch = candidates.stream()
+            List<Product> selected = candidates.stream()
                     .filter(p -> {
                         Set<String> keywords = p.getKeywordGroups().stream()
                                 .map(KeywordGroup::getMainKeyword)
                                 .collect(Collectors.toSet());
-                        return keywords.equals(comboSet);
+                        long matched = comboSet.stream().filter(keywords::contains).count();
+                        return matched >= Math.ceil(comboSet.size() * 0.5);
                     })
+                    .filter(p -> {
+                        String key = RecommendationUtil.extractBaseTitle(p.getTitle()) + "::" + p.getImageUrl();
+                        String brand = p.getBrand();
+                        boolean isDuplicate = seenProductKeys.contains(key) || seenBrands.contains(brand);
+                        if (!isDuplicate) {
+                            seenProductKeys.add(key);
+                            seenBrands.add(brand);
+                            return true;
+                        }
+                        return false;
+                    })
+                    .limit(maxPerCombo)
                     .toList();
-            List<Product> exactDistinct = pickDistinctProductsExactly(exactMatch, 4);
-            if (!exactDistinct.isEmpty()) return exactDistinct;
 
-            // 2. 완전 포함 (모든 키워드 포함) && 태그 수 작거나 같음
-            List<Product> partialMatch = candidates.stream()
-                    .filter(p -> {
-                        Set<String> keywords = p.getKeywordGroups().stream()
-                                .map(KeywordGroup::getMainKeyword)
-                                .collect(Collectors.toSet());
-                        return keywords.containsAll(comboSet) && keywords.size() <= comboSet.size();
-                    })
-                    .toList();
-            List<Product> partialDistinct = pickDistinctProductsExactly(partialMatch, 4);
-            if (!partialDistinct.isEmpty()) return partialDistinct;
-
-            // 3. 유사도 70% 이상 && 태그 수 작거나 같음
-            List<Product> relaxedMatch = candidates.stream()
-                    .filter(p -> {
-                        Set<String> keywords = p.getKeywordGroups().stream()
-                                .map(KeywordGroup::getMainKeyword)
-                                .collect(Collectors.toSet());
-                        long matchedCount = comboSet.stream().filter(keywords::contains).count();
-                        double similarity = matchedCount / (double) comboSet.size();
-                        return similarity >= 0.7 && keywords.size() <= comboSet.size();
-                    })
-                    .toList();
-            List<Product> relaxedDistinct = pickDistinctProductsExactly(relaxedMatch, 4);
-            if (!relaxedDistinct.isEmpty()) return relaxedDistinct;
+            allResults.addAll(selected);
         }
 
-        return Collections.emptyList();
+        return allResults.size() >= 10 ? allResults : Collections.emptyList();
     }
 
     private boolean containsAllComboKeywords(List<Product> products, List<String> combo) {
@@ -187,30 +182,6 @@ public class RecommendationService {
         log.debug("누락 키워드: {}", missing);
 
         return totalKeywords.containsAll(combo);
-    }
-
-    private List<Product> pickDistinctProductsExactly(List<Product> products, int needCount) {
-        Map<String, Product> uniqueMap = new LinkedHashMap<>();
-        Set<String> brandSet = new HashSet<>();
-
-        for (Product p : products) {
-            String brand = RecommendationUtil.extractBrand(p.getTitle(), p.getMallName());
-            String baseTitle = RecommendationUtil.extractBaseTitle(p.getTitle());
-
-            String key = baseTitle + "::" + p.getImageUrl();
-
-            if (brandSet.contains(brand)) continue;
-            if (uniqueMap.containsKey(key)) continue;
-
-            brandSet.add(brand);
-            uniqueMap.put(key, p);
-
-            if (uniqueMap.size() >= needCount) break;
-        }
-
-        return uniqueMap.size() >= needCount
-                ? new ArrayList<>(uniqueMap.values())
-                : Collections.emptyList();
     }
 
     private Guest existsGuest(UUID id) {
