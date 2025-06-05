@@ -8,5 +8,7 @@ public record ProductResponseDto(
         String link,
         String image,
         int lprice,
-        String mallName
+        String mallName,
+        String brand,
+        String category3
 ) {}
