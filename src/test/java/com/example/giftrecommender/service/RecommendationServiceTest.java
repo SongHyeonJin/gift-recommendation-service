@@ -62,7 +62,7 @@ class RecommendationServiceTest {
         recommendationSession = createRecommendationSession("테스트", guest);
         recommendationSessionRepository.save(recommendationSession);
 
-        KeywordGroup k1 = new KeywordGroup("연인");
+        KeywordGroup k1 = new KeywordGroup("여자친구");
         KeywordGroup k2 = new KeywordGroup("생일");
         KeywordGroup k3 = new KeywordGroup("악세서리");
         KeywordGroup k4 = new KeywordGroup("반지");
@@ -70,15 +70,15 @@ class RecommendationServiceTest {
         keywordGroupRepository.saveAll(List.of(k1, k2, k3, k4, k5));
 
         for (int i = 1; i <= 4; i++) {
-            products.add(
-                    createProduct(
-                            "악세서리 반지 금 여자친구 생일",
-                            "https://example.com/" + i,
-                            "https://img.com/" + i + ".jpg",
-                            90000,
-                            "브랜드" + i,
-                            List.of(k1, k2, k3, k4, k5))
-            );
+            String title = switch (i) {
+                case 1 -> "여자친구 생일 선물 금 반지";
+                case 2 -> "생일 반지 추천 여자친구용";
+                case 3 -> "고급 금 반지 악세서리 선물";
+                case 4 -> "여친 기념일 금 반지 악세서리";
+                default -> "기본 반지";
+            };
+            products.add(createProduct(title, "https://example.com/" + i,
+                    "https://img.com/" + i + ".jpg", 90000, "브랜드" + i, List.of(k1, k2, k3, k4, k5)));
         }
         productRepository.saveAll(products);
     }
@@ -184,6 +184,7 @@ class RecommendationServiceTest {
     @DisplayName("쿼터 초과 시 예외가 발생한다.")
     void quotaExceeded() {
         // given
+        productRepository.deleteAll();
         when(redisQuotaManager.canCall()).thenReturn(false);
         List<String> keywords = List.of("여자친구", "5~10만원", "생일", "악세서리", "반지", "금");
 
