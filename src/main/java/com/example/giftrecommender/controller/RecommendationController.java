@@ -36,10 +36,9 @@ public class RecommendationController {
     public ResponseEntity<BasicResponseDto<RecommendationResponseDto>> getRecommendation(
             @PathVariable("guestId") UUID guestId,
             @PathVariable("sessionId") UUID sessionId,
-
             @RequestBody RecommendationRequestDto request
     ) {
-        RecommendationResponseDto response = recommendationService.recommend(guestId, sessionId, request.keywords());
+        RecommendationResponseDto response = recommendationService.recommend(guestId, sessionId, request);
         return ResponseEntity.ok(BasicResponseDto.success("추천 완료", response));
     }
 
