@@ -44,8 +44,8 @@ class AnswerOptionRepositoryTest {
     @Test
     void findAllByQuestionId() {
         // given
-        AnswerOption a1 = createAnswerOption("운동", "운동", question);
-        AnswerOption a2 = createAnswerOption("독서", "책", question);
+        AnswerOption a1 = createAnswerOption("운동", question);
+        AnswerOption a2 = createAnswerOption("독서", question);
 
         answerOptionRepository.saveAll(List.of(a1, a2));
 
@@ -57,10 +57,9 @@ class AnswerOptionRepositoryTest {
         assertThat(result.get(0).getQuestion().getId()).isEqualTo(question.getId());
     }
 
-    private static AnswerOption createAnswerOption(String content, String recommendationKeyword, Question question) {
+    private static AnswerOption createAnswerOption(String content, Question question) {
         return AnswerOption.builder()
                 .content(content)
-                .recommendationKeyword(recommendationKeyword)
                 .question(question)
                 .build();
     }

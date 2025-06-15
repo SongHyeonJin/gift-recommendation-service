@@ -76,11 +76,11 @@ class UserAnswerServiceTest {
         questions.addAll(List.of(q1,q2));
         questionRepository.saveAll(questions);
 
-        AnswerOption a1 = answerOptionRepository.save(createAnswerOption("선택지1", "키워드1", q1));
-        AnswerOption a2 = answerOptionRepository.save(createAnswerOption("선택지2", "키워드2", q1));
-        AnswerOption a3 = answerOptionRepository.save(createAnswerOption("선택지1", "키워드3", q2));
-        AnswerOption a4 = answerOptionRepository.save(createAnswerOption("선택지2", "키워드4", q2));
-        AnswerOption a5 = answerOptionRepository.save(createAnswerOption("선택지3", "키워드5", q2));
+        AnswerOption a1 = answerOptionRepository.save(createAnswerOption("선택지1", q1));
+        AnswerOption a2 = answerOptionRepository.save(createAnswerOption("선택지2", q1));
+        AnswerOption a3 = answerOptionRepository.save(createAnswerOption("선택지1", q2));
+        AnswerOption a4 = answerOptionRepository.save(createAnswerOption("선택지2", q2));
+        AnswerOption a5 = answerOptionRepository.save(createAnswerOption("선택지3", q2));
         answerOptions.addAll(List.of(a1, a2, a3, a4, a5));
         answerOptionRepository.saveAll(answerOptions);
     }
@@ -119,8 +119,8 @@ class UserAnswerServiceTest {
     void saveAiUserAnswer() {
         // given
         QuestionRequestDto requestDto = new QuestionRequestDto("AI 질문 내용", QuestionType.CHOICE, 4);
-        AnswerOptionRequestDto option1 = new AnswerOptionRequestDto("1번 보기", "키워드1");
-        AnswerOptionRequestDto option2 = new AnswerOptionRequestDto("2번 보기", "키워드2");
+        AnswerOptionRequestDto option1 = new AnswerOptionRequestDto("1번 보기");
+        AnswerOptionRequestDto option2 = new AnswerOptionRequestDto("2번 보기");
         UserAnswerAiRequestDto userAnswerAiRequestDto = new UserAnswerAiRequestDto(requestDto, List.of(option1, option2), 1);
 
         // when
@@ -182,10 +182,9 @@ class UserAnswerServiceTest {
                 .hasMessageContaining(ExceptionEnum.FORBIDDEN.getMessage());
     }
 
-    private AnswerOption createAnswerOption(String content, String recommendationKeyword, Question question) {
+    private AnswerOption createAnswerOption(String content, Question question) {
         return AnswerOption.builder()
                 .content(content)
-                .recommendationKeyword(recommendationKeyword)
                 .question(question)
                 .build();
     }

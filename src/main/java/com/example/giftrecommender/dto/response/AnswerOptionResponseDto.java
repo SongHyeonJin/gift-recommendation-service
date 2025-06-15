@@ -9,9 +9,6 @@ public record AnswerOptionResponseDto (
         Long id,
 
         @Schema(description = "선택지 내용", example = "여자친구")
-        String content,
-
-        @Schema(description = "추천 키워드", example = "여자친구")
-        String recommendationKeyword
+        String content
 
 ) {}

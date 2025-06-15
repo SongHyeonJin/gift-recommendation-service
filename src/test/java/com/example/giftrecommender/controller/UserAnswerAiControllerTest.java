@@ -49,9 +49,9 @@ class UserAnswerAiControllerTest {
         // given
         QuestionRequestDto question = new QuestionRequestDto("연인의 취미가 뭐야?", QuestionType.CHOICE, 4);
         List<AnswerOptionRequestDto> options = List.of(
-                new AnswerOptionRequestDto("캠핑", "야외활동"),
-                new AnswerOptionRequestDto("운동", "건강"),
-                new AnswerOptionRequestDto("영화", "문화생활")
+                new AnswerOptionRequestDto("캠핑"),
+                new AnswerOptionRequestDto("운동"),
+                new AnswerOptionRequestDto("영화")
         );
         int selectedIndex = 1;
 

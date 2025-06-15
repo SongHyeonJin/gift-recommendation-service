@@ -19,17 +19,13 @@ public class AnswerOption {
     @Column(nullable = false, length = 300)
     private String content;
 
-    @Column(nullable = false, length = 100)
-    private String recommendationKeyword;
-
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "question_id", nullable = false)
     private Question question;
 
     @Builder
-    public AnswerOption(String content, String recommendationKeyword, Question question) {
+    public AnswerOption(String content, Question question) {
         this.content = content;
-        this.recommendationKeyword = recommendationKeyword;
         this.question = question;
     }
 }

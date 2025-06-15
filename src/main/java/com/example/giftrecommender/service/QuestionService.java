@@ -24,8 +24,7 @@ public class QuestionService {
                     List<AnswerOptionResponseDto> options = answerOptionRepository.findAllByQuestionId(question.getId()).stream()
                             .map(option -> new AnswerOptionResponseDto(
                                     option.getId(),
-                                    option.getContent(),
-                                    option.getRecommendationKeyword()))
+                                    option.getContent()))
                             .toList();
 
                     return new QuestionResponseDto(

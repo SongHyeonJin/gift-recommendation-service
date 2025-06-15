@@ -30,7 +30,6 @@ class UserAnswerTest {
                 .build();
         AnswerOption option = AnswerOption.builder()
                 .content("이건 선택지입니다")
-                .recommendationKeyword("추천키워드")
                 .question(question)
                 .build();
 
@@ -72,7 +71,6 @@ class UserAnswerTest {
         AiAnswerOption aiAnswerOption = AiAnswerOption.builder()
                 .question(aiQuestion)
                 .content("GPT가 추천한 답변")
-                .recommendationKeyword("우아한")
                 .selectedIndex(1)
                 .build();
 

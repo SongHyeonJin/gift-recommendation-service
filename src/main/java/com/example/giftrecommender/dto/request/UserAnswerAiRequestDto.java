@@ -13,16 +13,13 @@ import java.util.List;
   },
   "options": [
     {
-      "content": "캠핑",
-      "recommendationKeyword": "야외활동"
+      "content": "캠핑"
     },
     {
-      "content": "운동",
-      "recommendationKeyword": "건강"
+      "content": "운동"
     },
     {
-      "content": "영화",
-      "recommendationKeyword": "문화생활"
+      "content": "영화"
     }
   ],
   "selectedIndex": 1

@@ -32,8 +32,8 @@ class QuestionControllerTest {
     void getQuestionsSuccess() throws Exception {
         // given
         List<AnswerOptionResponseDto> optionList = List.of(
-                new AnswerOptionResponseDto(1L,"연인", "연인"),
-                new AnswerOptionResponseDto(2L, "부모님", "부모님")
+                new AnswerOptionResponseDto(1L,"연인"),
+                new AnswerOptionResponseDto(2L, "부모님")
         );
 
         List<QuestionResponseDto> fakeResponse = List.of(
@@ -56,8 +56,7 @@ class QuestionControllerTest {
                 .andExpect(jsonPath("$.data[0].content").value("누구에게 선물하나요?"))
                 .andExpect(jsonPath("$.data[0].type").value("CHOICE"))
                 .andExpect(jsonPath("$.data[0].order").value(1))
-                .andExpect(jsonPath("$.data[0].options[0].content").value("연인"))
-                .andExpect(jsonPath("$.data[0].options[0].recommendationKeyword").value("연인"));
+                .andExpect(jsonPath("$.data[0].options[0].content").value("연인"));
     }
 
 }

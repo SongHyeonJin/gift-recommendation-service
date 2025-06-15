@@ -23,18 +23,14 @@ public class AiAnswerOption {
     @Column(nullable = false, length = 300)
     private String content;
 
-    @Column(nullable = false, length = 100)
-    private String recommendationKeyword;
-
     // 프론트에서 선택한 선택지
     @Column(nullable = false)
     private int selectedIndex;
 
     @Builder
-    public AiAnswerOption(AiQuestion question, String content, String recommendationKeyword, int selectedIndex) {
+    public AiAnswerOption(AiQuestion question, String content, int selectedIndex) {
         this.question = question;
         this.content = content;
-        this.recommendationKeyword = recommendationKeyword;
         this.selectedIndex = selectedIndex;
     }
 }
