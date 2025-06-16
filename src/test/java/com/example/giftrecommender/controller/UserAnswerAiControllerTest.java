@@ -1,5 +1,6 @@
 package com.example.giftrecommender.controller;
 
+import com.example.giftrecommender.common.logging.LogEventService;
 import com.example.giftrecommender.domain.enums.QuestionType;
 import com.example.giftrecommender.dto.request.AnswerOptionRequestDto;
 import com.example.giftrecommender.dto.request.QuestionRequestDto;
@@ -32,6 +33,8 @@ class UserAnswerAiControllerTest {
     @Autowired private ObjectMapper objectMapper;
 
     @MockBean private UserAnswerService userAnswerService;
+
+    @MockBean private LogEventService logEventService;
 
     private UUID guestId;
 

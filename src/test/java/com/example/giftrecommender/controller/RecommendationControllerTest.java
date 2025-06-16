@@ -1,5 +1,6 @@
 package com.example.giftrecommender.controller;
 
+import com.example.giftrecommender.common.logging.LogEventService;
 import com.example.giftrecommender.dto.request.RecommendationRequestDto;
 import com.example.giftrecommender.dto.response.RecommendationResponseDto;
 import com.example.giftrecommender.dto.response.RecommendedProductResponseDto;
@@ -18,8 +19,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import java.util.List;
 import java.util.UUID;
 
-import static org.mockito.ArgumentMatchers.anyList;
-import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -36,6 +36,8 @@ class RecommendationControllerTest {
 
     @MockBean private RecommendationService recommendationService;
 
+    @MockBean private LogEventService logEventService;
+
     private UUID guestId;
     private UUID sessionId;
 
@@ -50,7 +52,7 @@ class RecommendationControllerTest {
     void recommendSuccess() throws Exception {
         // given
         RecommendationRequestDto request = new RecommendationRequestDto(
-                List.of("여자친구", "5~10만원", "생일", "악세서리", "반지", "금")
+                "여자친구", 30000, 50000, List.of("악세서리", "반지", "금")
         );
 
         RecommendedProductResponseDto product = new RecommendedProductResponseDto(
@@ -68,7 +70,7 @@ class RecommendationControllerTest {
                 List.of(product)
         );
 
-        when(recommendationService.recommend(eq(guestId), eq(sessionId), anyList())).thenReturn(fakeResponse);
+        when(recommendationService.recommend(eq(guestId), eq(sessionId), any(RecommendationRequestDto.class))).thenReturn(fakeResponse);
 
         // when  then
         mockMvc.perform(post("/api/guests/{guestId}/recommendation-sessions/{sessionId}/recommendation", guestId, sessionId)

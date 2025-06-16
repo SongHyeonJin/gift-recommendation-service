@@ -1,5 +1,6 @@
 package com.example.giftrecommender.controller;
 
+import com.example.giftrecommender.common.logging.LogEventService;
 import com.example.giftrecommender.domain.enums.QuestionType;
 import com.example.giftrecommender.dto.response.AnswerOptionResponseDto;
 import com.example.giftrecommender.dto.response.QuestionResponseDto;
@@ -26,6 +27,8 @@ class QuestionControllerTest {
     @Autowired private MockMvc mockMvc;
 
     @MockBean private QuestionService questionService;
+
+    @MockBean private LogEventService logEventService;
 
     @DisplayName("GET /questions - 질문 목록 조회 성공")
     @Test

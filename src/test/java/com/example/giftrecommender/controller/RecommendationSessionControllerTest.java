@@ -1,5 +1,6 @@
 package com.example.giftrecommender.controller;
 
+import com.example.giftrecommender.common.logging.LogEventService;
 import com.example.giftrecommender.dto.request.RecommendationSessionRequestDto;
 import com.example.giftrecommender.dto.response.RecommendationSessionResponseDto;
 import com.example.giftrecommender.service.RecommendationSessionService;
@@ -30,6 +31,8 @@ class RecommendationSessionControllerTest {
     @Autowired private ObjectMapper objectMapper;
 
     @MockBean private RecommendationSessionService recommendationSessionService;
+
+    @MockBean private LogEventService logEventService;
 
     private UUID guestId;
 
