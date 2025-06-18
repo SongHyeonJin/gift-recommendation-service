@@ -1,7 +1,6 @@
 package com.example.giftrecommender.controller;
 
 import com.example.giftrecommender.common.logging.LogEventService;
-import com.example.giftrecommender.dto.request.RecommendationSessionRequestDto;
 import com.example.giftrecommender.dto.response.RecommendationSessionResponseDto;
 import com.example.giftrecommender.service.RecommendationSessionService;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -47,22 +46,18 @@ class RecommendationSessionControllerTest {
         // given
         UUID testSessionId = UUID.randomUUID();
 
-        RecommendationSessionRequestDto request = new RecommendationSessionRequestDto("테스트");
 
         RecommendationSessionResponseDto fakeResponse = new RecommendationSessionResponseDto(
-                testSessionId,
-                request.name()
+                testSessionId
         );
 
-        when(recommendationSessionService.createRecommendationSession(guestId, request)).thenReturn(fakeResponse);
+        when(recommendationSessionService.createRecommendationSession(guestId)).thenReturn(fakeResponse);
 
         // when  then
         mockMvc.perform(post("/api/guests/{guestId}/recommendation-sessions", guestId)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
+                        .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.message").value("추천 세션 등록"))
-                .andExpect(jsonPath("$.data.name").value("테스트"));
+                .andExpect(jsonPath("$.message").value("추천 세션 등록"));
     }
 
 }

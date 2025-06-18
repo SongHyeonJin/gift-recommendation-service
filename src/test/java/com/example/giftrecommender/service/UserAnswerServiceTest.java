@@ -69,7 +69,7 @@ class UserAnswerServiceTest {
     void setUp() {
         guest = guestRepository.save(createGuest());
         session = sessionRepository.save(
-                createRecommendationSession("테스트", guest));
+                createRecommendationSession(guest));
 
         Question q1 = questionRepository.save(createQuestion("Q1 내용", 1));
         Question q2 = questionRepository.save(createQuestion("Q2 내용", 2));
@@ -197,10 +197,9 @@ class UserAnswerServiceTest {
                 .build();
     }
 
-    private static RecommendationSession createRecommendationSession(String name, Guest guest) {
+    private static RecommendationSession createRecommendationSession(Guest guest) {
         return RecommendationSession.builder()
                 .id(UUID.randomUUID())
-                .name(name)
                 .status(SessionStatus.PENDING)
                 .guest(guest)
                 .build();

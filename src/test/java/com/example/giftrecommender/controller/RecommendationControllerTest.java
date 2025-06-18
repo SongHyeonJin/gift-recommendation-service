@@ -52,7 +52,8 @@ class RecommendationControllerTest {
     void recommendSuccess() throws Exception {
         // given
         RecommendationRequestDto request = new RecommendationRequestDto(
-                "여자친구", 30000, 50000, List.of("악세서리", "반지", "금")
+                "여자친구", "20대", 50000, 100000,
+                "기념일", "악세서리", List.of("악세서리", "반지", "금")
         );
 
         RecommendedProductResponseDto product = new RecommendedProductResponseDto(
@@ -66,7 +67,6 @@ class RecommendationControllerTest {
         );
 
         RecommendationResponseDto fakeResponse = new RecommendationResponseDto(
-                "테스트",
                 List.of(product)
         );
 
@@ -78,7 +78,6 @@ class RecommendationControllerTest {
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.message").value("추천 완료"))
-                .andExpect(jsonPath("$.data.name").value("테스트"))
                 .andExpect(jsonPath("$.data.products[0].title").value("골드 반지"))
                 .andExpect(jsonPath("$.data.products[0].price").value(99000))
                 .andExpect(jsonPath("$.data.products[0].link").value("https://example.com/product/1"))
@@ -100,7 +99,6 @@ class RecommendationControllerTest {
         );
 
         RecommendationResponseDto fakeResponse = new RecommendationResponseDto(
-                "테스트",
                 List.of(product)
         );
 
@@ -109,7 +107,6 @@ class RecommendationControllerTest {
         mockMvc.perform(get("/api/guests/{guestId}/recommendation-sessions/{sessionId}/recommendation", guestId, sessionId))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.message").value("추천 결과 조회 성공"))
-                .andExpect(jsonPath("$.data.name").value("테스트"))
                 .andExpect(jsonPath("$.data.products[0].title").value("골드 반지"))
                 .andExpect(jsonPath("$.data.products[0].price").value(99000))
                 .andExpect(jsonPath("$.data.products[0].link").value("https://example.com/product/1"))

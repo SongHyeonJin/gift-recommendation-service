@@ -49,7 +49,6 @@ class UserAnswerTest {
         RecommendationSession session = RecommendationSession.builder()
                 .id(UUID.randomUUID())
                 .guest(guest)
-                .name("test")
                 .status(SessionStatus.PENDING)
                 .build();
         return session;
