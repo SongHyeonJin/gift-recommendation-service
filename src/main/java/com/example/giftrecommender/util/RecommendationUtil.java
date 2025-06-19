@@ -50,4 +50,16 @@ public class RecommendationUtil {
         return brand.trim().toLowerCase();
     }
 
+    public static boolean isBabyKeywordIncluded(String title) {
+        List<String> babyKeywords = List.of(
+                "아기", "유아", "아동", "키즈", "어린이", "아이", "장난감", "초등", "유치원", "베이비", "소꿉놀이", "뽀로로"
+        );
+        String lowerTitle = title.toLowerCase();
+        return babyKeywords.stream().anyMatch(lowerTitle::contains);
+    }
+
+    public static boolean allowBabyProduct(String title, String age, String reason, String preference) {
+        return !isBabyKeywordIncluded(title) || "10대 미만".equals(age) || "출산".equals(reason) || "출산/육아".equals(preference);
+    }
+
 }
