@@ -1,5 +1,6 @@
 package com.example.giftrecommender.controller;
 
+import com.example.giftrecommender.common.logging.LogEventService;
 import com.example.giftrecommender.dto.response.GuestResponseDto;
 import com.example.giftrecommender.service.GuestService;
 import org.junit.jupiter.api.DisplayName;
@@ -24,6 +25,8 @@ class GuestControllerTest {
     @Autowired private MockMvc mockMvc;
 
     @MockBean private GuestService guestService;
+
+    @MockBean private LogEventService logEventService;
 
     @DisplayName("POST /guests - 비회원 세션 생성 성공")
     @Test

@@ -7,7 +7,6 @@ import com.example.giftrecommender.domain.entity.RecommendationSession;
 import com.example.giftrecommender.domain.enums.SessionStatus;
 import com.example.giftrecommender.domain.repository.GuestRepository;
 import com.example.giftrecommender.domain.repository.RecommendationSessionRepository;
-import com.example.giftrecommender.dto.request.RecommendationSessionRequestDto;
 import com.example.giftrecommender.dto.response.RecommendationSessionResponseDto;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -23,7 +22,7 @@ public class RecommendationSessionService {
     private final GuestRepository guestRepository;
 
     @Transactional
-    public RecommendationSessionResponseDto createRecommendationSession(UUID guestId, RecommendationSessionRequestDto requestDto) {
+    public RecommendationSessionResponseDto createRecommendationSession(UUID guestId) {
         Guest guest = guestRepository.findById(guestId).orElseThrow(
                 () -> new ErrorException(ExceptionEnum.GUEST_NOT_FOUND)
         );
@@ -31,14 +30,12 @@ public class RecommendationSessionService {
         RecommendationSession recommendationSession = RecommendationSession.builder()
                 .id(UUID.randomUUID())
                 .guest(guest)
-                .name(requestDto.name())
                 .status(SessionStatus.PENDING)
                 .build();
 
         recommendationSessionRepository.save(recommendationSession);
         return new RecommendationSessionResponseDto(
-                recommendationSession.getId(),
-                recommendationSession.getName()
+                recommendationSession.getId()
         );
     }
 

@@ -82,7 +82,6 @@ public class UserAnswerService {
                     return AiAnswerOption.builder()
                             .question(question)
                             .content(opt.content())
-                            .recommendationKeyword(opt.recommendationKeyword())
                             .selectedIndex(i)
                             .build();
                 })

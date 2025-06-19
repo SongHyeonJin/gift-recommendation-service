@@ -36,10 +36,6 @@ public class NaverApiClient {
     private String clientSecret;
 
     public List<ProductResponseDto> search(String query, int page, int display) {
-        if (!quotaManager.canCall()) {
-            throw new ErrorException(ExceptionEnum.QUOTA_EXCEEDED);
-        }
-
         int start = (page - 1) * display + 1;
         String encodedQuery = URLEncoder.encode(query, StandardCharsets.UTF_8);
         String url = "https://openapi.naver.com/v1/search/shop.json?query=" + encodedQuery +

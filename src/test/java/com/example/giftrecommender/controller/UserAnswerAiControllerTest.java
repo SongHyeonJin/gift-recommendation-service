@@ -1,5 +1,6 @@
 package com.example.giftrecommender.controller;
 
+import com.example.giftrecommender.common.logging.LogEventService;
 import com.example.giftrecommender.domain.enums.QuestionType;
 import com.example.giftrecommender.dto.request.AnswerOptionRequestDto;
 import com.example.giftrecommender.dto.request.QuestionRequestDto;
@@ -33,6 +34,8 @@ class UserAnswerAiControllerTest {
 
     @MockBean private UserAnswerService userAnswerService;
 
+    @MockBean private LogEventService logEventService;
+
     private UUID guestId;
 
     private UUID sessionId;
@@ -49,9 +52,9 @@ class UserAnswerAiControllerTest {
         // given
         QuestionRequestDto question = new QuestionRequestDto("연인의 취미가 뭐야?", QuestionType.CHOICE, 4);
         List<AnswerOptionRequestDto> options = List.of(
-                new AnswerOptionRequestDto("캠핑", "야외활동"),
-                new AnswerOptionRequestDto("운동", "건강"),
-                new AnswerOptionRequestDto("영화", "문화생활")
+                new AnswerOptionRequestDto("캠핑"),
+                new AnswerOptionRequestDto("운동"),
+                new AnswerOptionRequestDto("영화")
         );
         int selectedIndex = 1;
 

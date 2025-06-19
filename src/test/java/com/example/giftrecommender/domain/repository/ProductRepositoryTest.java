@@ -43,7 +43,7 @@ class ProductRepositoryTest {
         productRepository.save(product);
 
         // when
-        List<Product> result = productRepository.findTopByTagsAndPriceRange(List.of("운동", "러닝화", "러닝가방"), 30000, 60000);
+        List<Product> result = productRepository.findTopByKeywordAndPriceRange("운동", 30000, 60000);
 
         // then
         assertThat(result).hasSize(1).extracting(Product::getTitle).contains("제목");
@@ -62,6 +62,24 @@ class ProductRepositoryTest {
 
         // then
         assertThat(result).containsOnly("링크1");
+    }
+
+    @DisplayName("키워드와 가격 범위로 상품 개수를 조회할 수 있다.")
+    @Test
+    void countByKeywordAndPrice() {
+        // given
+        KeywordGroup kg1 = keywordGroupRepository.save(new KeywordGroup("운동"));
+        KeywordGroup kg2 = keywordGroupRepository.save(new KeywordGroup("러닝화"));
+
+        productRepository.save(createProduct("상품1", "링크1", "img1", 40000, "mall", List.of(kg1)));
+        productRepository.save(createProduct("상품2", "링크2", "img2", 45000, "mall", List.of(kg1)));
+        productRepository.save(createProduct("상품3", "링크3", "img3", 90000, "mall", List.of(kg2))); // 다른 키워드
+
+        // when
+        int count = productRepository.countByKeywordAndPrice("운동", 30000, 50000);
+
+        // then
+        assertThat(count).isEqualTo(2);
     }
 
     private Product createProduct(String title, String link, String imageUrl, Integer price,

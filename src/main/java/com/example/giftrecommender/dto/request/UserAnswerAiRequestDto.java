@@ -7,22 +7,19 @@ import java.util.List;
 @Schema(description = "GPT 기반 질문과 선택지에 대한 유저 응답을 담는 요청 DTO (질문, 선택지 포함)", example = """
 {
   "question": {
-    "content": "연인의 취미가 뭐야?",
+    "content": "OO이는 어떤 느낌의 선물을 좋아해?",
     "type": "CHOICE",
-    "order": 4
+    "order": 7
   },
   "options": [
     {
-      "content": "캠핑",
-      "recommendationKeyword": "야외활동"
+      "content": "실용적"
     },
     {
-      "content": "운동",
-      "recommendationKeyword": "건강"
+      "content": "감동적"
     },
     {
-      "content": "영화",
-      "recommendationKeyword": "문화생활"
+      "content": "가성비"
     }
   ],
   "selectedIndex": 1

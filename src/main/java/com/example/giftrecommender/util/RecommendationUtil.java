@@ -1,67 +1,10 @@
 package com.example.giftrecommender.util;
 
-import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
 public class RecommendationUtil {
-    /*
-     * 추천 조합 우선순위 생성 로직
-     *
-     * 입력 예:
-     * - receiver: "여자친구"
-     * - reason: "생일"
-     * - tags: ["우아한", "악세서리", "목걸이"]
-     *
-     * 조합 생성 순서 (우선순위 높은 순):
-     * 1) [receiver + tag 1개 + reason]
-     * 2) [receiver + tag 2개 + reason]
-     * ...
-     * n) [receiver + tag n개 + reason]
-     * 마지막) [receiver + reason] (태그가 없을 때 fallback)
-     *
-     * 각 조합은 DB 키워드 검색 등에 사용됨
-     */
-    public static List<List<String>> generatePriorityCombos(List<String> tags, String receiver, String reason) {
-        List<List<String>> result = new ArrayList<>();
-
-        int n = tags.size();
-        // 1개부터 n개까지 조합
-        for (int r = 1; r <= n; r++) {
-            List<List<String>> combinations = new ArrayList<>();
-            generateCombinations(tags, 0, r, new ArrayList<>(), combinations);
-            for (List<String> tagCombo : combinations) {
-                List<String> combo = new ArrayList<>();
-                if (!receiver.isBlank()) combo.add(receiver);
-                combo.addAll(tagCombo);
-                if (!reason.isBlank()) combo.add(reason);
-                result.add(combo);
-            }
-        }
-
-        // 태그 없고 receiver, reason만 있을 때 fallback
-        if (tags.isEmpty() && !receiver.isBlank() && !reason.isBlank()) {
-            result.add(List.of(receiver, reason));
-        }
-
-        return result;
-    }
-
-    // 조합 생성
-    private static void generateCombinations(List<String> tags, int start, int r,
-                                             List<String> cur, List<List<String>> out) {
-        if (cur.size() == r) {
-            out.add(new ArrayList<>(cur));
-            return;
-        }
-        for (int i = start; i < tags.size(); i++) {
-            cur.add(tags.get(i));
-            generateCombinations(tags, i + 1, r, cur, out);
-            cur.remove(cur.size() - 1);
-        }
-    }
-
     /*
      * 상품 제목 전처리 로직
      * - 불필요한 특수 문자, 단위, 괄호 등 제거
@@ -97,4 +40,26 @@ public class RecommendationUtil {
 
         return union.isEmpty() ? 0.0 : (double) intersection.size() / union.size();
     }
+    /*
+     * 브랜드 추출
+     * - DB에 저장된 brand 컬럼 값 기반으로 사용
+     * - 빈 문자열이거나 null인 경우 중복 제거 대상에서 제외
+     */
+    public static String extractBrand(String brand) {
+        if (brand == null || brand.isBlank()) return null;
+        return brand.trim().toLowerCase();
+    }
+
+    public static boolean isBabyKeywordIncluded(String title) {
+        List<String> babyKeywords = List.of(
+                "아기", "유아", "아동", "키즈", "어린이", "아이", "장난감", "초등", "유치원", "베이비", "소꿉놀이", "뽀로로"
+        );
+        String lowerTitle = title.toLowerCase();
+        return babyKeywords.stream().anyMatch(lowerTitle::contains);
+    }
+
+    public static boolean allowBabyProduct(String title, String age, String reason, String preference) {
+        return !isBabyKeywordIncluded(title) || "10대 미만".equals(age) || "출산".equals(reason) || "출산/육아".equals(preference);
+    }
+
 }

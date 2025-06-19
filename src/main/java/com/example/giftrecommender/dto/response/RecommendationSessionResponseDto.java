@@ -6,8 +6,5 @@ import java.util.UUID;
 
 public record RecommendationSessionResponseDto (
         @Schema(description = "생성된 추천 세션 ID", example = "2f90aa9a-5d10-46b0-a571-3e091354a4d6")
-        UUID recommendationSessionId,
-
-        @Schema(description = "생성된 이름", example = "회원1")
-        String name
+        UUID recommendationSessionId
 ) {}

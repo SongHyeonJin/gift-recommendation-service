@@ -8,6 +8,7 @@ import com.example.giftrecommender.domain.entity.keyword.KeywordGroup;
 import com.example.giftrecommender.domain.enums.SessionStatus;
 import com.example.giftrecommender.domain.repository.*;
 import com.example.giftrecommender.domain.repository.keyword.KeywordGroupRepository;
+import com.example.giftrecommender.dto.request.RecommendationRequestDto;
 import com.example.giftrecommender.dto.response.RecommendationResponseDto;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -24,29 +25,38 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.Mockito.when;
+import static org.mockito.BDDMockito.willDoNothing;
 
 @ActiveProfiles("test")
 @SpringBootTest
 class RecommendationServiceTest {
 
-    @Autowired private RecommendationService recommendationService;
+    @Autowired
+    private RecommendationService recommendationService;
 
-    @Autowired private GuestRepository guestRepository;
+    @Autowired
+    private GuestRepository guestRepository;
 
-    @Autowired private RecommendationSessionRepository recommendationSessionRepository;
+    @Autowired
+    private RecommendationSessionRepository recommendationSessionRepository;
 
-    @Autowired private ProductRepository productRepository;
+    @Autowired
+    private ProductRepository productRepository;
 
-    @Autowired private RecommendationResultRepository recommendationResultRepository;
+    @Autowired
+    private RecommendationResultRepository recommendationResultRepository;
 
-    @Autowired private RecommendationProductRepository recommendationProductRepository;
+    @Autowired
+    private RecommendationProductRepository recommendationProductRepository;
 
-    @Autowired private KeywordGroupRepository keywordGroupRepository;
+    @Autowired
+    private KeywordGroupRepository keywordGroupRepository;
 
-    @MockBean private RedisQuotaManager redisQuotaManager;
+    @MockBean
+    private RedisQuotaManager redisQuotaManager;
 
-    @MockBean private ProductImportService productImportService;
+    @MockBean
+    private ProductImportService productImportService;
 
     private Guest guest;
 
@@ -59,40 +69,35 @@ class RecommendationServiceTest {
         guest = createGuest();
         guestRepository.save(guest);
 
-        recommendationSession = createRecommendationSession("테스트", guest);
+        recommendationSession = createRecommendationSession(guest);
         recommendationSessionRepository.save(recommendationSession);
 
         // 키워드 저장
-        KeywordGroup girlfriend = keywordGroupRepository.save(new KeywordGroup("여자친구"));
-        KeywordGroup birthday = keywordGroupRepository.save(new KeywordGroup("생일"));
-        KeywordGroup moodlight = keywordGroupRepository.save(new KeywordGroup("무드등"));
-        KeywordGroup ring = keywordGroupRepository.save(new KeywordGroup("반지"));
-        KeywordGroup gold = keywordGroupRepository.save(new KeywordGroup("금"));
+        KeywordGroup shoose = keywordGroupRepository.save(new KeywordGroup("러닝화"));
+        KeywordGroup bag = keywordGroupRepository.save(new KeywordGroup("러닝가방"));
+        KeywordGroup watch = keywordGroupRepository.save(new KeywordGroup("스마트워치"));
+        KeywordGroup band = keywordGroupRepository.save(new KeywordGroup("러닝밴드"));
 
-        // 조합1: ["여자친구","무드등","생일"]
-        products.add(createProduct("스텔라 라이트 오브제", "https://ex.com/1", "https://img.com/1.jpg", 95000, "빛의정원", "라이트하우스", List.of(girlfriend, moodlight, birthday)));
-        products.add(createProduct("드림캐처 별빛 조명", "https://ex.com/2", "https://img.com/2.jpg", 93000, "힐링하우스", "별조명코리아", List.of(girlfriend, moodlight, birthday)));
-        products.add(createProduct("밤하늘 테이블 램프", "https://ex.com/3", "https://img.com/3.jpg", 97000, "조명마을", "무드펄", List.of(girlfriend, moodlight, birthday)));
+        // 러닝화
+        products.add(createProduct("에어플로우 러닝화", "https://ex.com/1", "https://img.com/1.jpg", 94000, "핏스토어", "에어핏", List.of(shoose)));
+        products.add(createProduct("바람길 쿠셔닝 슈즈", "https://ex.com/2", "https://img.com/2.jpg", 95000, "컴포트샵", "윈드스텝", List.of(shoose)));
+        products.add(createProduct("라이트런 니트슈즈", "https://ex.com/3", "https://img.com/3.jpg", 96000, "러너하우스", "라이트핏", List.of(shoose)));
 
-        // 조합2: ["여자친구","반지","생일"]
-        products.add(createProduct("러브메탈 핑크링", "https://ex.com/4", "https://img.com/4.jpg", 94000, "러브링스몰", "러브링스", List.of(girlfriend, ring, birthday)));
-        products.add(createProduct("메르시 볼드링", "https://ex.com/5", "https://img.com/5.jpg", 95000, "모던쥬얼", "메르시", List.of(girlfriend, ring, birthday)));
-        products.add(createProduct("심장박동 골드링", "https://ex.com/6", "https://img.com/6.jpg", 96000, "하트골드샵", "골드하트", List.of(girlfriend, ring, birthday)));
+        // 러닝가방
+        products.add(createProduct("트레일러 러닝백", "https://ex.com/4", "https://img.com/4.jpg", 96000, "트레일기어", "트레일러", List.of(bag)));
+        products.add(createProduct("에어로 슬링백", "https://ex.com/5", "https://img.com/5.jpg", 98000, "백플래닛", "에어로팩", List.of(bag)));
+        products.add(createProduct("하이퍼 경량 백팩", "https://ex.com/6", "https://img.com/6.jpg", 97000, "경량스포츠", "하이퍼백", List.of(bag)));
 
-        // 조합3: ["여자친구","금","생일"]
-        products.add(createProduct("클래식 진주 드롭귀걸이", "https://ex.com/7", "https://img.com/7.jpg", 96000, "로즈앤골드", "클래식뷰", List.of(girlfriend, gold, birthday)));
-        products.add(createProduct("헬렌 체인 뱅글", "https://ex.com/8", "https://img.com/8.jpg", 98000, "골드하임", "헬렌주얼리", List.of(girlfriend, gold, birthday)));
-        products.add(createProduct("루체아 로즈 팬던트", "https://ex.com/9", "https://img.com/9.jpg", 97000, "핑크주얼", "루체아", List.of(girlfriend, gold, birthday)));
+        // 스마트워치
+        products.add(createProduct("핏트래커 스포츠워치", "https://ex.com/7", "https://img.com/7.jpg", 95000, "스마트기어", "핏트래커", List.of(watch)));
+        products.add(createProduct("비전핏 스마트밴드", "https://ex.com/8", "https://img.com/8.jpg", 94000, "비전웨어", "비전핏", List.of(watch)));
+        products.add(createProduct("펄스핏 워치2", "https://ex.com/9", "https://img.com/9.jpg", 96000, "펄스샵", "펄스핏", List.of(watch)));
 
-        // 조합4: ["여자친구","무드등","반지","생일"]
-        products.add(createProduct("피오레 파스텔 세트", "https://ex.com/10", "https://img.com/10.jpg", 95000, "조이쥬얼", "피오레라", List.of(girlfriend, moodlight, ring, birthday)));
-        products.add(createProduct("미드나잇 앤써 링박스", "https://ex.com/11", "https://img.com/11.jpg", 94000, "빛앤링", "앤써링", List.of(girlfriend, moodlight, ring, birthday)));
-        products.add(createProduct("글로우 뷰티 조명키트", "https://ex.com/12", "https://img.com/12.jpg", 96000, "예쁜반지샵", "글로우존", List.of(girlfriend, moodlight, ring, birthday)));
+        // 러닝밴드
+        products.add(createProduct("컴프밴드 프로", "https://ex.com/10", "https://img.com/10.jpg", 97000, "컴프존", "컴프밴드", List.of(band)));
+        products.add(createProduct("에어핏 러너밴드", "https://ex.com/11", "https://img.com/11.jpg", 99000, "에어핏코리아", "에어핏", List.of(band)));
+        products.add(createProduct("에너지핏 레그밴드", "https://ex.com/12", "https://img.com/12.jpg", 96000, "에너지샵", "에너지핏", List.of(band)));
 
-        // 조합5: ["여자친구","무드등","금","생일"]
-        products.add(createProduct("라파엘로 캔들보틀", "https://ex.com/13", "https://img.com/13.jpg", 97000, "골드앤라이트", "라파엘로", List.of(girlfriend, moodlight, gold, birthday)));
-        products.add(createProduct("루미에르 스톤 목걸이", "https://ex.com/14", "https://img.com/14.jpg", 99000, "다이아주얼", "루미에르", List.of(girlfriend, moodlight, gold, birthday)));
-        products.add(createProduct("플레르 노블 링세트", "https://ex.com/15", "https://img.com/15.jpg", 96000, "럭스골드", "플레르", List.of(girlfriend, moodlight, gold, birthday)));
 
         productRepository.saveAll(products);
     }
@@ -107,20 +112,20 @@ class RecommendationServiceTest {
         guestRepository.deleteAllInBatch();
     }
 
-    @DisplayName("조건에 맞는 상품이 있을 경우 추천 결과  10개가 성공적으로 반환된다.")
+    @DisplayName("조건에 맞는 상품이 있을 경우 키워드당 최대 2개씩 추천 결과 8개가 반환된다.")
     @Test
     void recommendationResultProductsExist() {
         // given
-        List<String> keywords = List.of("여자친구", "5~10만원", "생일", "무드등", "반지", "금");
-        when(redisQuotaManager.canCall()).thenReturn(true);
+        RecommendationRequestDto request = createRequest();
+        willDoNothing().given(redisQuotaManager).acquire();
 
         // when
         RecommendationResponseDto response =
-                recommendationService.recommend(guest.getId(), recommendationSession.getId(), keywords);
+                recommendationService.recommend(guest.getId(), recommendationSession.getId(), request);
 
         // then
         assertThat(response).isNotNull();
-        assertThat(response.products()).hasSize(10);
+        assertThat(response.products()).hasSize(8);
     }
 
     @DisplayName("추천 결과 조회가 정상적으로 동작한다")
@@ -130,7 +135,7 @@ class RecommendationServiceTest {
         RecommendationResult result = recommendationResultRepository.save(RecommendationResult.builder()
                 .guest(guest)
                 .recommendationSession(recommendationSession)
-                .keywords(List.of("여자친구", "무드등", "반지", "금", "생일"))
+                .keywords(List.of("러닝화", "러닝가방", "스마트워치", "러닝밴드"))
                 .build());
 
         recommendationProductRepository.save(
@@ -146,20 +151,19 @@ class RecommendationServiceTest {
 
         // then
         assertThat(response).isNotNull();
-        assertThat(response.name()).isEqualTo("테스트");
         assertThat(response.products()).hasSize(1);
-        assertThat(response.products().get(0).title()).contains("오브제");
+        assertThat(response.products().get(0).title()).contains("러닝화");
     }
 
     @Test
     @DisplayName("존재하지 않는 게스트일 경우 예외가 발생한다.")
     void guestNotFound() {
         // given
-        List<String> keywords = List.of("반지", "5~10만원");
+        RecommendationRequestDto request = createRequest();
 
         // when  then
         assertThatThrownBy(
-                () -> recommendationService.recommend(UUID.randomUUID(), recommendationSession.getId(), keywords))
+                () -> recommendationService.recommend(UUID.randomUUID(), recommendationSession.getId(), request))
                 .isInstanceOf(ErrorException.class)
                 .hasMessageContaining(ExceptionEnum.GUEST_NOT_FOUND.getMessage());
     }
@@ -168,11 +172,11 @@ class RecommendationServiceTest {
     @DisplayName("존재하지 않는 세션일 경우 예외가 발생한다.")
     void sessionNotFound() {
         // given
-        List<String> keywords = List.of("반지", "5~10만원");
+        RecommendationRequestDto request = createRequest();
 
         // when  then
         assertThatThrownBy(
-                () -> recommendationService.recommend(guest.getId(), UUID.randomUUID(), keywords))
+                () -> recommendationService.recommend(guest.getId(), UUID.randomUUID(), request))
                 .isInstanceOf(ErrorException.class)
                 .hasMessageContaining(ExceptionEnum.SESSION_NOT_FOUND.getMessage());
     }
@@ -182,28 +186,13 @@ class RecommendationServiceTest {
     void sessionOwnerInvalid() {
         // given
         Guest anotherGuest = guestRepository.save(createGuest());
-        List<String> keywords = List.of("반지", "5~10만원");
+        RecommendationRequestDto request = createRequest();
 
         // when  then
         assertThatThrownBy(
-                () -> recommendationService.recommend(anotherGuest.getId(), recommendationSession.getId(), keywords))
+                () -> recommendationService.recommend(anotherGuest.getId(), recommendationSession.getId(), request))
                 .isInstanceOf(ErrorException.class)
                 .hasMessageContaining(ExceptionEnum.SESSION_FORBIDDEN.getMessage());
-    }
-
-    @Test
-    @DisplayName("쿼터 초과 시 예외가 발생한다.")
-    void quotaExceeded() {
-        // given
-        productRepository.deleteAll();
-        when(redisQuotaManager.canCall()).thenReturn(false);
-        List<String> keywords = List.of("여자친구", "5~10만원", "생일", "무드등", "반지", "금");
-
-        // when  then
-        assertThatThrownBy(
-                () -> recommendationService.recommend(guest.getId(), recommendationSession.getId(), keywords))
-                .isInstanceOf(ErrorException.class)
-                .hasMessageContaining(ExceptionEnum.QUOTA_EXCEEDED.getMessage());
     }
 
     @Test
@@ -214,6 +203,11 @@ class RecommendationServiceTest {
                 () -> recommendationService.getRecommendationResult(guest.getId(), recommendationSession.getId()))
                 .isInstanceOf(ErrorException.class)
                 .hasMessageContaining(ExceptionEnum.RESULT_NOT_FOUND.getMessage());
+    }
+
+    private RecommendationRequestDto createRequest() {
+        return new RecommendationRequestDto("남자친구", "20대",50000, 100000,
+                "생일", "운동", List.of("러닝화", "러닝가방", "스마트워치", "러닝밴드"));
     }
 
     private static Product createProduct(String title, String link, String imageUrl,
@@ -232,11 +226,9 @@ class RecommendationServiceTest {
     }
 
 
-
-    private static RecommendationSession createRecommendationSession(String name, Guest guest) {
+    private static RecommendationSession createRecommendationSession(Guest guest) {
         return RecommendationSession.builder()
                 .id(UUID.randomUUID())
-                .name(name)
                 .status(SessionStatus.PENDING)
                 .guest(guest)
                 .build();
