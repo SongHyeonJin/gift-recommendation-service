@@ -8,15 +8,16 @@ import java.util.List;
 @Schema(description = "질문 응답 DTO", example = """
 {
   "id": 1,
-  "content": "누구에게 선물할 건가요?",
+  "content": "누구한테 줄거야?",
   "type": "CHOICE",
   "order": 1,
   "options": [
-    { "content": "연인", "recommendationKeyword": "연인" },
-    { "content": "부모님", "recommendationKeyword": "부모님" },
-    { "content": "선생님", "recommendationKeyword": "선생님" },
-    { "content": "썸 관계", "recommendationKeyword": "썸" },
-    { "content": "친구", "recommendationKeyword": "친구" }
+    { "content": "친구에게!" },
+    { "content": "연인에게" },
+    { "content": "부모님께" },
+    { "content": "형제/자매에게!" },
+    { "content": "친척에게!" },
+    { "content": "지인에게!" }
   ]
 }
 """)

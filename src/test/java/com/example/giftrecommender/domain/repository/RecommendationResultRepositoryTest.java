@@ -38,7 +38,7 @@ class RecommendationResultRepositoryTest {
         guest = createGuest();
         guestRepository.save(guest);
 
-        recommendationSession = createRecommendationSession("테스트", guest);
+        recommendationSession = createRecommendationSession(guest);
         recommendationSessionRepository.save(recommendationSession);
     }
 
@@ -68,10 +68,9 @@ class RecommendationResultRepositoryTest {
         assertThat(result.get().getRecommendationSession().getId()).isEqualTo(recommendationSession.getId());
     }
 
-    private static RecommendationSession createRecommendationSession(String name, Guest guest) {
+    private static RecommendationSession createRecommendationSession(Guest guest) {
         return RecommendationSession.builder()
                 .id(UUID.randomUUID())
-                .name(name)
                 .status(SessionStatus.PENDING)
                 .guest(guest)
                 .build();

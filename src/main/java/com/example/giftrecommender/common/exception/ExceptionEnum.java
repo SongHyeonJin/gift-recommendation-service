@@ -13,10 +13,11 @@ public enum ExceptionEnum {
     INVALID_AI_ANSWER_INDEX(HttpStatus.BAD_REQUEST.value(), "선택된 AI 답변 인덱스가 유효하지 않습니다."),
     FORBIDDEN( HttpStatus.FORBIDDEN.value(),"접근 권한이 없습니다."),
     NO_PRODUCT_MATCH(HttpStatus.BAD_REQUEST.value(), "추천 조건에 맞는 상품이 없습니다."),
-    QUOTA_EXCEEDED(HttpStatus.TOO_MANY_REQUESTS.value(), "오늘은 더 이상 호출할 수 없습니다."),
     RESULT_NOT_FOUND(HttpStatus.BAD_REQUEST.value(), "추천 결과를 찾을 수 없습니다."),
     SESSION_FORBIDDEN(HttpStatus.FORBIDDEN.value(), "세션 접근 권한이 없습니다."),
-    RECOMMENDATION_EMPTY(HttpStatus.BAD_REQUEST.value(), "추천 결과가 없습니다. 키워드를 조정하거나 다시 시도해주세요.");
+    RECOMMENDATION_EMPTY(HttpStatus.BAD_REQUEST.value(), "추천 결과가 없습니다. 키워드를 조정하거나 다시 시도해주세요."),
+    QUOTA_SECOND_EXCEEDED(HttpStatus.TOO_MANY_REQUESTS.value(), "잠시 후 다시 시도해주세요. (초당 호출 제한)"),
+    QUOTA_DAILY_EXCEEDED(HttpStatus.TOO_MANY_REQUESTS.value(), "오늘은 더 이상 호출할 수 없습니다.");
 
 
     private final int statusCode;

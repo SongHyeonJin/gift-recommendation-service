@@ -33,11 +33,11 @@ class QuestionServiceTest {
         Question q1 = questionRepository.save(createQuestion("Q1 내용", 1));
         Question q2 = questionRepository.save(createQuestion("Q2 내용", 2));
 
-        answerOptionRepository.save(createAnswerOption("선택지1", "키워드1", q1));
-        answerOptionRepository.save(createAnswerOption("선택지2", "키워드2", q1));
-        answerOptionRepository.save(createAnswerOption("선택지1", "키워드3", q2));
-        answerOptionRepository.save(createAnswerOption("선택지2", "키워드4", q2));
-        answerOptionRepository.save(createAnswerOption("선택지3", "키워드5", q2));
+        answerOptionRepository.save(createAnswerOption("선택지1", q1));
+        answerOptionRepository.save(createAnswerOption("선택지2", q1));
+        answerOptionRepository.save(createAnswerOption("선택지1", q2));
+        answerOptionRepository.save(createAnswerOption("선택지2", q2));
+        answerOptionRepository.save(createAnswerOption("선택지3", q2));
 
         // when
         List<QuestionResponseDto> result = questionService.getAllQuestion();
@@ -50,10 +50,9 @@ class QuestionServiceTest {
         assertThat(result.get(1).options()).hasSize(3);
     }
 
-    private AnswerOption createAnswerOption(String content, String recommendationKeyword, Question question) {
+    private AnswerOption createAnswerOption(String content, Question question) {
         return AnswerOption.builder()
                 .content(content)
-                .recommendationKeyword(recommendationKeyword)
                 .question(question)
                 .build();
     }

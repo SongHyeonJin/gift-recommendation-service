@@ -1,6 +1,9 @@
 package com.example.giftrecommender.service;
 
 
+import com.example.giftrecommender.common.exception.ErrorException;
+import com.example.giftrecommender.common.exception.ExceptionEnum;
+import com.example.giftrecommender.common.quota.RedisQuotaManager;
 import com.example.giftrecommender.domain.entity.Product;
 import com.example.giftrecommender.domain.repository.ProductRepository;
 import com.example.giftrecommender.domain.repository.keyword.KeywordGroupRepository;
@@ -18,7 +21,9 @@ import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.when;
 
 @ActiveProfiles("test")
@@ -30,6 +35,8 @@ class ProductImportServiceTest {
     @Autowired private ProductRepository productRepository;
 
     @Autowired private KeywordGroupRepository keywordGroupRepository;
+
+    @MockBean private RedisQuotaManager redisQuotaManager;
 
     @MockBean private NaverApiClient naverApiClient;
 
@@ -43,10 +50,9 @@ class ProductImportServiceTest {
     @Test
     void importUntilEnoughPriceMatches() {
         // given
-        List<String> tags = List.of("감성", "우아한");
-        String priceKeyword = "5~10만원";
-        String receiver = "연인";
-        String reason = "생일";
+        String keyword = "감성";
+        int minPrice = 50000;
+        int maxPrice = 100000;
 
         ProductResponseDto mockDto = new ProductResponseDto(
                 UUID.randomUUID(),
@@ -65,7 +71,7 @@ class ProductImportServiceTest {
                 .thenReturn(List.of());
 
         // when
-        productImportService.importUntilEnough(tags, priceKeyword, receiver, reason, 1);
+        productImportService.importOneOrTwoPerKeyword(keyword, minPrice, maxPrice, "20대", "생일","악세서리", 1);
 
         // then
         List<Product> saved = productRepository.findAll();
@@ -74,6 +80,24 @@ class ProductImportServiceTest {
         assertThat(savedProduct.getPrice()).isEqualTo(89000);
         assertThat(savedProduct.getTitle()).contains("감성");
         assertThat(savedProduct.getLink()).isEqualTo("https://example.com/product1");
+    }
+
+    @DisplayName("일일 쿼터 초과 시 예외가 발생한다")
+    @Test
+    void importUntilEnough_whenDailyQuotaExceeded_thenThrowsException() {
+        // given
+        String keyword = "감성";
+        int minPrice = 30000;
+        int maxPrice = 50000;
+
+        doThrow(new ErrorException(ExceptionEnum.QUOTA_DAILY_EXCEEDED))
+                .when(redisQuotaManager).acquire();
+
+        // when then
+        assertThatThrownBy(() ->
+                productImportService.importOneOrTwoPerKeyword(keyword, minPrice, maxPrice, "20대", "생일","악세서리", 1))
+                .isInstanceOf(ErrorException.class)
+                .hasMessage(ExceptionEnum.QUOTA_DAILY_EXCEEDED.getMessage());
     }
 
 }

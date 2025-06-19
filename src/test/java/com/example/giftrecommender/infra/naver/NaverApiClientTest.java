@@ -24,10 +24,9 @@ import java.net.URI;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 
 @ActiveProfiles("test")
 class NaverApiClientTest {
@@ -63,7 +62,7 @@ class NaverApiClientTest {
     @Test
     void testSearch_success() throws Exception {
         // given
-        when(quotaManager.canCall()).thenReturn(true);
+        doNothing().when(quotaManager).acquire();
 
         String json = """
         {
@@ -96,15 +95,4 @@ class NaverApiClientTest {
         assertThat(result.get(0).lprice()).isEqualTo(12345);
     }
 
-    @DisplayName("쿼터 초과 시 예외가 발생해야 한다.")
-    @Test
-    void testSearch_quotaExceeded() {
-        // given
-        when(quotaManager.canCall()).thenReturn(false);
-
-        // when then
-        assertThatThrownBy(() -> naverApiClient.search("테스트", 1, 10))
-                .isInstanceOf(ErrorException.class)
-                .hasMessage(ExceptionEnum.QUOTA_EXCEEDED.getMessage());
-    }
 }
