@@ -9,11 +9,13 @@ import com.example.giftrecommender.domain.repository.GuestRepository;
 import com.example.giftrecommender.domain.repository.RecommendationSessionRepository;
 import com.example.giftrecommender.dto.response.RecommendationSessionResponseDto;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.UUID;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class RecommendationSessionService {
@@ -23,9 +25,11 @@ public class RecommendationSessionService {
 
     @Transactional
     public RecommendationSessionResponseDto createRecommendationSession(UUID guestId) {
-        Guest guest = guestRepository.findById(guestId).orElseThrow(
-                () -> new ErrorException(ExceptionEnum.GUEST_NOT_FOUND)
-        );
+        Guest guest = guestRepository.findById(guestId)
+                .orElseThrow(() -> {
+                    log.error("게스트 조회 실패: guestId={}", guestId);
+                    return new ErrorException(ExceptionEnum.GUEST_NOT_FOUND);
+                });
 
         RecommendationSession recommendationSession = RecommendationSession.builder()
                 .id(UUID.randomUUID())

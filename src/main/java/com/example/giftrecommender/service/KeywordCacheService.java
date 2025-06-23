@@ -3,6 +3,7 @@ package com.example.giftrecommender.service;
 import com.example.giftrecommender.domain.entity.keyword.KeywordGroup;
 import com.example.giftrecommender.domain.repository.keyword.KeywordGroupRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -10,6 +11,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class KeywordCacheService {
@@ -38,7 +40,10 @@ public class KeywordCacheService {
             // 5. 반드시 재조회
             KeywordGroup saved = keywordGroupRepository.findByMainKeywordIn(Set.of(keyword))
                     .stream().findFirst()
-                    .orElseThrow();
+                    .orElseThrow(() -> {
+                        log.error("키워드 저장 후 조회 실패 | keyword={}", keyword);
+                        return new IllegalStateException("KeywordGroup not found after upsert: " + keyword);
+                    });
 
             cache.put(keyword, saved);
             return saved;

@@ -82,6 +82,7 @@ public class RecommendationService {
         }
 
         if (finalProducts.isEmpty()) {
+            log.error("추천 실패: 추천 결과 없음 | guestId={}, sessionId={}, keywords={}", guestId, sessionId, keywords);
             throw new ErrorException(ExceptionEnum.RECOMMENDATION_EMPTY);
         }
 
@@ -158,16 +159,23 @@ public class RecommendationService {
 
     private Guest existsGuest(UUID id) {
         return guestRepository.findById(id)
-                .orElseThrow(() -> new ErrorException(ExceptionEnum.GUEST_NOT_FOUND));
+                .orElseThrow(() -> {
+                    log.error("게스트 조회 실패: guestId={}", id);
+                    return new ErrorException(ExceptionEnum.GUEST_NOT_FOUND);
+                });
     }
 
     private RecommendationSession existsRecommendationSession(UUID id) {
         return sessionRepository.findById(id)
-                .orElseThrow(() -> new ErrorException(ExceptionEnum.SESSION_NOT_FOUND));
+                .orElseThrow(() -> {
+                    log.error("추천 세션 조회 실패: sessionId={}", id);
+                    return new ErrorException(ExceptionEnum.SESSION_NOT_FOUND);
+                });
     }
 
     private static void verifySessionOwner(RecommendationSession session, Guest guest) {
         if (!session.getGuest().getId().equals(guest.getId())) {
+            log.error("세션 접근 권한 오류 | sessionId={}, guestId={}", session.getId(), guest.getId());
             throw new ErrorException(ExceptionEnum.SESSION_FORBIDDEN);
         }
     }

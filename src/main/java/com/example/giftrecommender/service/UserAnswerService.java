@@ -16,6 +16,7 @@ import com.example.giftrecommender.dto.request.AnswerOptionRequestDto;
 import com.example.giftrecommender.dto.request.UserAnswerAiRequestDto;
 import com.example.giftrecommender.dto.request.UserAnswerRequestDto;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -23,6 +24,7 @@ import java.util.List;
 import java.util.UUID;
 import java.util.stream.IntStream;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class UserAnswerService {
@@ -45,13 +47,15 @@ public class UserAnswerService {
             throw new ErrorException(ExceptionEnum.FORBIDDEN);
         }
 
-        Question question = questionRepository.findById(request.questionId()).orElseThrow(
-                () -> new ErrorException(ExceptionEnum.QUESTION_NOT_FOUND)
-        );
+        Question question = questionRepository.findById(request.questionId()).orElseThrow(() -> {
+            log.error("질문 ID 조회 실패 | questionId={}", request.questionId());
+            return new ErrorException(ExceptionEnum.QUESTION_NOT_FOUND);
+        });
 
-        AnswerOption option = optionRepository.findById(request.answerOptionId()).orElseThrow(
-                () -> new ErrorException(ExceptionEnum.OPTION_NOT_FOUND)
-        );
+        AnswerOption option = optionRepository.findById(request.answerOptionId()).orElseThrow(() -> {
+            log.error("선택지 ID 조회 실패 | questionId={}", request.answerOptionId());
+            return new ErrorException(ExceptionEnum.OPTION_NOT_FOUND);
+        });
 
         UserAnswer userAnswer = UserAnswer.ofFixed(guest, session, question, option, request.type());
         userAnswerRepository.save(userAnswer);
@@ -64,6 +68,7 @@ public class UserAnswerService {
         RecommendationSession session = existsRecommendationSession(sessionId);
 
         if (!session.getGuest().getId().equals(guest.getId())) {
+            log.warn("세션 접근 권한 오류 | guestId={}, sessionId={}", guestId, sessionId);
             throw new ErrorException(ExceptionEnum.FORBIDDEN);
         }
 
@@ -94,16 +99,20 @@ public class UserAnswerService {
         userAnswerRepository.save(userAnswer);
     }
 
-    private Guest existsGuest(UUID guestId) {
-        return guestRepository.findById(guestId).orElseThrow(
-                () -> new ErrorException(ExceptionEnum.GUEST_NOT_FOUND)
-        );
+    private Guest existsGuest(UUID id) {
+        return guestRepository.findById(id)
+                .orElseThrow(() -> {
+                    log.error("게스트 조회 실패: guestId={}", id);
+                    return new ErrorException(ExceptionEnum.GUEST_NOT_FOUND);
+                });
     }
 
-    private RecommendationSession existsRecommendationSession(UUID sessionId) {
-        return sessionRepository.findById(sessionId).orElseThrow(
-                () -> new ErrorException(ExceptionEnum.SESSION_NOT_FOUND)
-        );
+    private RecommendationSession existsRecommendationSession(UUID id) {
+        return sessionRepository.findById(id)
+                .orElseThrow(() -> {
+                    log.error("추천 세션 조회 실패: sessionId={}", id);
+                    return new ErrorException(ExceptionEnum.SESSION_NOT_FOUND);
+                });
     }
 
 
