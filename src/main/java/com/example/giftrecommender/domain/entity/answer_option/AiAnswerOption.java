@@ -24,8 +24,8 @@ public class AiAnswerOption {
     private String content;
 
     // 프론트에서 선택한 선택지
-    @Column(nullable = false)
-    private int selectedIndex;
+    @Column
+    private Integer selectedIndex;
 
     @Builder
     public AiAnswerOption(AiQuestion question, String content, int selectedIndex) {

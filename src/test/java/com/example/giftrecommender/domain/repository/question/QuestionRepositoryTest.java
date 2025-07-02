@@ -41,7 +41,7 @@ class QuestionRepositoryTest {
     private static Question createQuestion(String content, int order) {
         return Question.builder()
                 .content(content)
-                .type(QuestionType.CHOICE)
+                .type(QuestionType.FIXED)
                 .order(order)
                 .build();
     }

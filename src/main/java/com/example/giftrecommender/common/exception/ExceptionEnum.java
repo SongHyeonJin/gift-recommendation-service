@@ -17,7 +17,8 @@ public enum ExceptionEnum {
     SESSION_FORBIDDEN(HttpStatus.FORBIDDEN.value(), "세션 접근 권한이 없습니다."),
     RECOMMENDATION_EMPTY(HttpStatus.BAD_REQUEST.value(), "추천 결과가 없습니다. 키워드를 조정하거나 다시 시도해주세요."),
     QUOTA_SECOND_EXCEEDED(HttpStatus.TOO_MANY_REQUESTS.value(), "잠시 후 다시 시도해주세요. (초당 호출 제한)"),
-    QUOTA_DAILY_EXCEEDED(HttpStatus.TOO_MANY_REQUESTS.value(), "오늘은 더 이상 호출할 수 없습니다.");
+    QUOTA_DAILY_EXCEEDED(HttpStatus.TOO_MANY_REQUESTS.value(), "오늘은 더 이상 호출할 수 없습니다."),
+    INVALID_REQUEST(HttpStatus.BAD_REQUEST.value(), "요청 파라미터가 올바르지 않습니다.");
 
 
     private final int statusCode;

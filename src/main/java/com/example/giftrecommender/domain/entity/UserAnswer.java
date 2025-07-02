@@ -4,6 +4,7 @@ import com.example.giftrecommender.domain.entity.answer_option.AiAnswerOption;
 import com.example.giftrecommender.domain.entity.answer_option.AnswerOption;
 import com.example.giftrecommender.domain.entity.question.AiQuestion;
 import com.example.giftrecommender.domain.entity.question.Question;
+import com.example.giftrecommender.domain.enums.AnswerOptionType;
 import com.example.giftrecommender.domain.enums.QuestionType;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
@@ -48,40 +49,53 @@ public class UserAnswer {
     private AiAnswerOption aiAnswerOption;
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false, length = 20)
-    private QuestionType type;
+    @Column(name = "question_type", nullable = false, length = 20)
+    private QuestionType questionType;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "answer_option_type", nullable = false, length = 20)
+    private AnswerOptionType answerOptionType;
+
+    @Column(name = "answer_text", length = 300)
+    private String answerText;
 
     private Instant createdAt;
 
     // 고정 질문 생성자
-    public UserAnswer(Guest guest, RecommendationSession recommendationSession,
-                      Question question, AnswerOption answerOption, QuestionType type) {
+    public UserAnswer(Guest guest, RecommendationSession recommendationSession, Question question, AnswerOption answerOption,
+                      QuestionType questionType, AnswerOptionType answerOptionType, String answerText) {
         this.guest = guest;
         this.recommendationSession = recommendationSession;
         this.question = question;
         this.answerOption = answerOption;
-        this.type = type;
+        this.questionType = questionType;
+        this.answerOptionType = answerOptionType;
+        this.answerText = answerText;
     }
 
     public static UserAnswer ofFixed(Guest guest, RecommendationSession recommendationSession,
-                                     Question question, AnswerOption answerOption, QuestionType type) {
-        return new UserAnswer(guest, recommendationSession, question, answerOption, type);
+                                     Question question, AnswerOption answerOption,
+                                     QuestionType questionType, AnswerOptionType answerOptionType, String answerText) {
+        return new UserAnswer(guest, recommendationSession, question, answerOption, questionType, answerOptionType, answerText);
     }
 
     // GPT 질문 생성자
-    public UserAnswer(Guest guest, RecommendationSession recommendationSession,
-                      AiQuestion aiQuestion, AiAnswerOption aiAnswerOption, QuestionType type) {
+    public UserAnswer(Guest guest, RecommendationSession recommendationSession, AiQuestion aiQuestion, AiAnswerOption aiAnswerOption,
+                      QuestionType questionType, AnswerOptionType answerOptionType, String answerText) {
         this.guest = guest;
         this.recommendationSession = recommendationSession;
         this.aiQuestion = aiQuestion;
         this.aiAnswerOption = aiAnswerOption;
-        this.type = type;
+        this.questionType = questionType;
+        this.answerOptionType = answerOptionType;
+        this.answerText = answerText;
     }
 
 
     public static UserAnswer ofAi(Guest guest, RecommendationSession recommendationSession,
-                      AiQuestion aiQuestion, AiAnswerOption aiAnswerOption, QuestionType type) {
-        return new UserAnswer(guest, recommendationSession, aiQuestion, aiAnswerOption, type);
+                                  AiQuestion aiQuestion, AiAnswerOption aiAnswerOption,
+                                  QuestionType questionType, AnswerOptionType answerOptionType, String answerText) {
+        return new UserAnswer(guest, recommendationSession, aiQuestion, aiAnswerOption, questionType, answerOptionType, answerText);
     }
 
     @PrePersist
