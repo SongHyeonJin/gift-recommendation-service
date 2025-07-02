@@ -1,6 +1,7 @@
 package com.example.giftrecommender.controller;
 
 import com.example.giftrecommender.common.logging.LogEventService;
+import com.example.giftrecommender.domain.enums.AnswerOptionType;
 import com.example.giftrecommender.domain.enums.QuestionType;
 import com.example.giftrecommender.dto.request.AnswerOptionRequestDto;
 import com.example.giftrecommender.dto.request.QuestionRequestDto;
@@ -33,11 +34,9 @@ class UserAnswerAiControllerTest {
     @Autowired private ObjectMapper objectMapper;
 
     @MockBean private UserAnswerService userAnswerService;
-
     @MockBean private LogEventService logEventService;
 
     private UUID guestId;
-
     private UUID sessionId;
 
     @BeforeEach
@@ -46,19 +45,24 @@ class UserAnswerAiControllerTest {
         sessionId = UUID.randomUUID();
     }
 
-    @DisplayName("POST /ai-answers - GPT 기반 질문/선택지/답변 저장 성공")
+    @DisplayName("POST /ai-answers - 선택형 응답 저장 성공")
     @Test
-    void saveAiQuestionSuccess() throws Exception {
+    void saveAiChoiceAnswerSuccess() throws Exception {
         // given
-        QuestionRequestDto question = new QuestionRequestDto("연인의 취미가 뭐야?", QuestionType.CHOICE, 4);
+        QuestionRequestDto question = new QuestionRequestDto("연인의 취미가 뭐야?", QuestionType.AI, 4);
         List<AnswerOptionRequestDto> options = List.of(
                 new AnswerOptionRequestDto("캠핑"),
                 new AnswerOptionRequestDto("운동"),
                 new AnswerOptionRequestDto("영화")
         );
-        int selectedIndex = 1;
 
-        UserAnswerAiRequestDto requestDto = new UserAnswerAiRequestDto(question, options, selectedIndex);
+        UserAnswerAiRequestDto requestDto = new UserAnswerAiRequestDto(
+                question,
+                options,
+                1,
+                null,
+                AnswerOptionType.CHOICE
+        );
 
         doNothing().when(userAnswerService).saveAiQuestionAndAnswer(guestId, sessionId, requestDto);
 
@@ -71,4 +75,33 @@ class UserAnswerAiControllerTest {
                 .andExpect(jsonPath("$.data").doesNotExist());
     }
 
+    @DisplayName("POST /ai-answers - 직접입력형 응답 저장 성공")
+    @Test
+    void saveAiTextAnswerSuccess() throws Exception {
+        // given
+        QuestionRequestDto question = new QuestionRequestDto("그 사람이 좋아하는 선물은?", QuestionType.AI, 5);
+        List<AnswerOptionRequestDto> options = List.of(
+                new AnswerOptionRequestDto("실용적"),
+                new AnswerOptionRequestDto("감성적"),
+                new AnswerOptionRequestDto("가성비")
+        );
+
+        UserAnswerAiRequestDto requestDto = new UserAnswerAiRequestDto(
+                question,
+                options,
+                null,
+                "트렌디한 것",
+                AnswerOptionType.TEXT
+        );
+
+        doNothing().when(userAnswerService).saveAiQuestionAndAnswer(guestId, sessionId, requestDto);
+
+        // when & then
+        mockMvc.perform(post("/api/guests/{guestId}/recommendation-sessions/{sessionId}/ai-answers", guestId, sessionId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(requestDto)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value("AI 질문, 선택지 저장 완료 및 유저 응답 완료"))
+                .andExpect(jsonPath("$.data").doesNotExist());
+    }
 }
