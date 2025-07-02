@@ -7,6 +7,8 @@ import com.example.giftrecommender.domain.entity.answer_option.AiAnswerOption;
 import com.example.giftrecommender.domain.entity.answer_option.AnswerOption;
 import com.example.giftrecommender.domain.entity.question.AiQuestion;
 import com.example.giftrecommender.domain.entity.question.Question;
+import com.example.giftrecommender.domain.enums.AnswerOptionType;
+import com.example.giftrecommender.domain.enums.QuestionType;
 import com.example.giftrecommender.domain.repository.*;
 import com.example.giftrecommender.domain.repository.answer_option.AiAnswerOptionRepository;
 import com.example.giftrecommender.domain.repository.answer_option.AnswerOptionRepository;
@@ -38,7 +40,6 @@ public class UserAnswerService {
     @Transactional
     public void saveAnswer(UUID guestId, UUID sessionId, UserAnswerRequestDto request) {
         Guest guest = existsGuest(guestId);
-
         RecommendationSession session = existsRecommendationSession(sessionId);
 
         if (!session.getGuest().getId().equals(guest.getId())) {
@@ -49,11 +50,23 @@ public class UserAnswerService {
                 () -> new ErrorException(ExceptionEnum.QUESTION_NOT_FOUND)
         );
 
-        AnswerOption option = optionRepository.findById(request.answerOptionId()).orElseThrow(
-                () -> new ErrorException(ExceptionEnum.OPTION_NOT_FOUND)
-        );
+        AnswerOption answerOption = null;
+        String answerText = request.answerText();
 
-        UserAnswer userAnswer = UserAnswer.ofFixed(guest, session, question, option, request.type());
+        if (request.answerOptionType() == AnswerOptionType.CHOICE) {
+            if (request.answerOptionId() == null) {
+                throw new ErrorException(ExceptionEnum.INVALID_REQUEST);
+            }
+            answerOption = optionRepository.findById(request.answerOptionId()).orElseThrow(
+                    () -> new ErrorException(ExceptionEnum.OPTION_NOT_FOUND)
+            );
+            answerText = answerOption.getContent();
+        }
+
+        UserAnswer userAnswer = UserAnswer.ofFixed(
+                guest, session, question, answerOption,
+                request.questionType(), request.answerOptionType(), answerText
+        );
         userAnswerRepository.save(userAnswer);
     }
 
@@ -88,9 +101,21 @@ public class UserAnswerService {
                 .toList();
         aiAnswerOptionRepository.saveAll(options);
 
-        AiAnswerOption selectedOption = options.get(requestDto.selectedIndex());
+        AiAnswerOption selectedOption = null;
+        String answerText = requestDto.answerText();
 
-        UserAnswer userAnswer = UserAnswer.ofAi(guest, session, question, selectedOption, requestDto.question().type());
+        if (requestDto.answerOptionType() == AnswerOptionType.CHOICE) {
+            if (requestDto.selectedIndex() == null || requestDto.selectedIndex() < 0 || requestDto.selectedIndex() >= options.size()) {
+                throw new ErrorException(ExceptionEnum.INVALID_REQUEST);
+            }
+            selectedOption = options.get(requestDto.selectedIndex());
+            answerText = selectedOption.getContent();
+        }
+
+        UserAnswer userAnswer = UserAnswer.ofAi(
+                guest, session, question, selectedOption,
+                QuestionType.AI, requestDto.answerOptionType(), answerText
+        );
         userAnswerRepository.save(userAnswer);
     }
 
