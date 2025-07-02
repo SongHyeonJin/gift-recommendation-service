@@ -34,7 +34,7 @@ class AnswerOptionRepositoryTest {
         question = questionRepository.save(
                 Question.builder()
                         .content("취미는?")
-                        .type(QuestionType.CHOICE)
+                        .type(QuestionType.FIXED)
                         .order(1)
                         .build()
         );

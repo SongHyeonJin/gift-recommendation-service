@@ -9,6 +9,7 @@ import com.example.giftrecommender.domain.entity.answer_option.AiAnswerOption;
 import com.example.giftrecommender.domain.entity.answer_option.AnswerOption;
 import com.example.giftrecommender.domain.entity.question.AiQuestion;
 import com.example.giftrecommender.domain.entity.question.Question;
+import com.example.giftrecommender.domain.enums.AnswerOptionType;
 import com.example.giftrecommender.domain.enums.QuestionType;
 import com.example.giftrecommender.domain.enums.SessionStatus;
 import com.example.giftrecommender.domain.repository.GuestRepository;
@@ -98,11 +99,17 @@ class UserAnswerServiceTest {
 
     @DisplayName("고정형 답변을 저장할 수 있다.")
     @Test
-    void saveUserAnswer() {
+    void saveUserAnswer_choiceType() {
         // given
         Question question = questions.get(0);
         AnswerOption option = answerOptions.get(0);
-        UserAnswerRequestDto request = new UserAnswerRequestDto(question.getId(), QuestionType.CHOICE, option.getId());
+        UserAnswerRequestDto request = new UserAnswerRequestDto(
+                question.getId(),
+                QuestionType.FIXED,
+                AnswerOptionType.CHOICE,
+                option.getId(),
+                null
+        );
 
         // when
         userAnswerService.saveAnswer(guest.getId(), session.getId(), request);
@@ -111,17 +118,49 @@ class UserAnswerServiceTest {
         List<UserAnswer> saved = userAnswerRepository.findAll();
         assertThat(saved).hasSize(1);
         assertThat(saved.get(0).getGuest().getId()).isEqualTo(guest.getId());
+        assertThat(saved.get(0).getAnswerOption().getId()).isEqualTo(option.getId());
+        assertThat(saved.get(0).getAnswerOptionType()).isEqualTo(AnswerOptionType.CHOICE);
     }
 
-    @DisplayName("AI 질문, 선택지와 답변을 저장할 수 있다.")
+    @DisplayName("고정형 답변 - 직접입력형(TEXT)을 저장할 수 있다.")
+    @Test
+    void saveUserAnswer_textType() {
+        // given
+        Question question = questions.get(0);
+        UserAnswerRequestDto request = new UserAnswerRequestDto(
+                question.getId(),
+                QuestionType.FIXED,
+                AnswerOptionType.TEXT,
+                null,
+                "직접입력한답변"
+        );
+
+        // when
+        userAnswerService.saveAnswer(guest.getId(), session.getId(), request);
+
+        // then
+        List<UserAnswer> saved = userAnswerRepository.findAll();
+        assertThat(saved).hasSize(1);
+        assertThat(saved.get(0).getAnswerText()).isEqualTo("직접입력한답변");
+        assertThat(saved.get(0).getAnswerOptionType()).isEqualTo(AnswerOptionType.TEXT);
+        assertThat(saved.get(0).getAnswerOption()).isNull();
+    }
+
+    @DisplayName("AI 질문/선택지/답변을 저장할 수 있다.")
     @Test
     @Transactional
-    void saveAiUserAnswer() {
+    void saveAiUserAnswer_choiceType() {
         // given
-        QuestionRequestDto requestDto = new QuestionRequestDto("AI 질문 내용", QuestionType.CHOICE, 4);
+        QuestionRequestDto requestDto = new QuestionRequestDto("AI 질문 내용", QuestionType.AI, 4);
         AnswerOptionRequestDto option1 = new AnswerOptionRequestDto("1번 보기");
         AnswerOptionRequestDto option2 = new AnswerOptionRequestDto("2번 보기");
-        UserAnswerAiRequestDto userAnswerAiRequestDto = new UserAnswerAiRequestDto(requestDto, List.of(option1, option2), 1);
+        UserAnswerAiRequestDto userAnswerAiRequestDto = new UserAnswerAiRequestDto(
+                requestDto,
+                List.of(option1, option2),
+                1,
+                null,
+                AnswerOptionType.CHOICE
+        );
 
         // when
         userAnswerService.saveAiQuestionAndAnswer(guest.getId(), session.getId(), userAnswerAiRequestDto);
@@ -135,6 +174,36 @@ class UserAnswerServiceTest {
         assertThat(savedOptions).hasSize(2);
         assertThat(savedAnswers).hasSize(1);
         assertThat(savedAnswers.get(0).getAiAnswerOption().getContent()).isEqualTo("2번 보기");
+        assertThat(savedAnswers.get(0).getAnswerOptionType()).isEqualTo(AnswerOptionType.CHOICE);
+    }
+
+    @DisplayName("AI 질문 - 직접입력형(TEXT) 저장")
+    @Test
+    @Transactional
+    void saveAiUserAnswer_textType() {
+        // given
+        QuestionRequestDto requestDto = new QuestionRequestDto("AI 질문 내용", QuestionType.AI, 4);
+        List<AnswerOptionRequestDto> options = List.of(
+                new AnswerOptionRequestDto("보기1"),
+                new AnswerOptionRequestDto("보기2")
+        );
+        UserAnswerAiRequestDto dto = new UserAnswerAiRequestDto(
+                requestDto,
+                options,
+                null,
+                "직접 입력한 텍스트",
+                AnswerOptionType.TEXT
+        );
+
+        // when
+        userAnswerService.saveAiQuestionAndAnswer(guest.getId(), session.getId(), dto);
+
+        // then
+        List<UserAnswer> saved = userAnswerRepository.findAll();
+        assertThat(saved).hasSize(1);
+        assertThat(saved.get(0).getAnswerText()).isEqualTo("직접 입력한 텍스트");
+        assertThat(saved.get(0).getAnswerOptionType()).isEqualTo(AnswerOptionType.TEXT);
+        assertThat(saved.get(0).getAiAnswerOption()).isNull();
     }
 
     @DisplayName("게스트가 존재하지 않으면 예외가 발생한다")
@@ -144,7 +213,14 @@ class UserAnswerServiceTest {
         UUID invalidGuestId = UUID.randomUUID();
         Question question = questions.get(0);
         AnswerOption option = answerOptions.get(0);
-        UserAnswerRequestDto request = new UserAnswerRequestDto(question.getId(), QuestionType.CHOICE, option.getId());
+
+        UserAnswerRequestDto request = new UserAnswerRequestDto(
+                question.getId(),
+                QuestionType.FIXED,
+                AnswerOptionType.CHOICE,
+                option.getId(),
+                null
+        );
 
         // when & then
         assertThatThrownBy(() -> userAnswerService.saveAnswer(invalidGuestId, session.getId(), request))
@@ -159,7 +235,14 @@ class UserAnswerServiceTest {
         UUID invalidSessionId = UUID.randomUUID();
         Question question = questions.get(0);
         AnswerOption option = answerOptions.get(0);
-        UserAnswerRequestDto request = new UserAnswerRequestDto(question.getId(), QuestionType.CHOICE, option.getId());
+
+        UserAnswerRequestDto request = new UserAnswerRequestDto(
+                question.getId(),
+                QuestionType.FIXED,
+                AnswerOptionType.CHOICE,
+                option.getId(),
+                null
+        );
 
         // when & then
         assertThatThrownBy(() -> userAnswerService.saveAnswer(guest.getId(), invalidSessionId, request))
@@ -174,7 +257,14 @@ class UserAnswerServiceTest {
         Guest otherGuest = guestRepository.save(createGuest());
         Question question = questions.get(0);
         AnswerOption option = answerOptions.get(0);
-        UserAnswerRequestDto request = new UserAnswerRequestDto(question.getId(), QuestionType.CHOICE, option.getId());
+
+        UserAnswerRequestDto request = new UserAnswerRequestDto(
+                question.getId(),
+                QuestionType.FIXED,
+                AnswerOptionType.CHOICE,
+                option.getId(),
+                null
+        );
 
         // when & then
         assertThatThrownBy(() -> userAnswerService.saveAnswer(otherGuest.getId(), session.getId(), request))
@@ -192,7 +282,7 @@ class UserAnswerServiceTest {
     private Question createQuestion(String content, Integer order) {
         return Question.builder()
                 .content(content)
-                .type(QuestionType.CHOICE)
+                .type(QuestionType.FIXED)
                 .order(order)
                 .build();
     }

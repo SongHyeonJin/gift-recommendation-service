@@ -43,7 +43,7 @@ class QuestionControllerTest {
                 new QuestionResponseDto(
                         1L,
                         "누구에게 선물하나요?",
-                        QuestionType.CHOICE,
+                        QuestionType.FIXED,
                         1,
                         optionList
                 )
@@ -57,7 +57,7 @@ class QuestionControllerTest {
                 .andExpect(jsonPath("$.message").value("질문 목록 조회 성공"))
                 .andExpect(jsonPath("$.data[0].id").value(1))
                 .andExpect(jsonPath("$.data[0].content").value("누구에게 선물하나요?"))
-                .andExpect(jsonPath("$.data[0].type").value("CHOICE"))
+                .andExpect(jsonPath("$.data[0].type").value("FIXED"))
                 .andExpect(jsonPath("$.data[0].order").value(1))
                 .andExpect(jsonPath("$.data[0].options[0].content").value("연인"));
     }

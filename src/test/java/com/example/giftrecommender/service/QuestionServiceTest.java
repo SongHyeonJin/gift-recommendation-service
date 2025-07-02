@@ -60,7 +60,7 @@ class QuestionServiceTest {
     private Question createQuestion(String content, Integer order) {
         return Question.builder()
                 .content(content)
-                .type(QuestionType.CHOICE)
+                .type(QuestionType.FIXED)
                 .order(order)
                 .build();
     }
