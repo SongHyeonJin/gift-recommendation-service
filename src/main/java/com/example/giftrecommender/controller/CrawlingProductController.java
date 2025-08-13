@@ -3,9 +3,11 @@ package com.example.giftrecommender.controller;
 import com.example.giftrecommender.common.BasicResponseDto;
 import com.example.giftrecommender.domain.enums.Age;
 import com.example.giftrecommender.domain.enums.Gender;
+import com.example.giftrecommender.dto.request.ConfirmBulkRequestDto;
 import com.example.giftrecommender.dto.request.ConfirmRequestDto;
 import com.example.giftrecommender.dto.request.CrawlingProductRequestDto;
 import com.example.giftrecommender.dto.request.ScoreRequestDto;
+import com.example.giftrecommender.dto.response.ConfirmBulkResponseDto;
 import com.example.giftrecommender.dto.response.ConfirmResponseDto;
 import com.example.giftrecommender.dto.response.CrawlingProductResponseDto;
 import com.example.giftrecommender.dto.response.ScoreResponseDto;
@@ -37,7 +39,7 @@ public class CrawlingProductController {
     }
 
     @Operation(summary = "크롤링 상품 여러 건 저장")
-    @PostMapping("/batch")
+    @PostMapping("/bulk")
     public ResponseEntity<List<CrawlingProductResponseDto>> saveAll(@RequestBody List<CrawlingProductRequestDto> requestDtoList) {
         return ResponseEntity.ok(crawlingProductService.saveAll(requestDtoList));
     }
@@ -83,6 +85,17 @@ public class CrawlingProductController {
     ) {
         return ResponseEntity.ok(
                 BasicResponseDto.success("관리자 컨펌 상태 변경 완료.", crawlingProductService.updateConfirmStatus(productId, requestDto))
+        );
+    }
+
+    @Operation(summary = "관리자 컨펌 상태 일괄 변경")
+    @PutMapping("/confirm/bulk")
+    public ResponseEntity<BasicResponseDto<ConfirmBulkResponseDto>> updateConfirmStatusBulk(
+            @RequestBody ConfirmBulkRequestDto request
+    ) {
+        ConfirmBulkResponseDto result = crawlingProductService.updateConfirmStatusBulk(request);
+        return ResponseEntity.ok(
+                BasicResponseDto.success("관리자 컨펌 상태 일괄 변경 완료.", result)
         );
     }
 
