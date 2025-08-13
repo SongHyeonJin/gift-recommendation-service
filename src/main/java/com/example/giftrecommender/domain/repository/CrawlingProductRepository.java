@@ -6,8 +6,11 @@ import com.example.giftrecommender.domain.enums.Gender;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+
+import java.util.List;
 
 public interface CrawlingProductRepository extends JpaRepository<CrawlingProduct, Long> {
 
@@ -40,5 +43,14 @@ public interface CrawlingProductRepository extends JpaRepository<CrawlingProduct
             @Param("isConfirmed") Boolean isConfirmed,
             Pageable pageable
     );
+
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+      UPDATE CrawlingProduct p
+         SET p.isConfirmed = :isConfirmed,
+             p.updatedAt = CURRENT_TIMESTAMP
+       WHERE p.id IN :ids
+    """)
+    int bulkUpdateConfirm(@Param("ids") List<Long> ids, @Param("isConfirmed") boolean isConfirmed);
 
 }

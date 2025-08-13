@@ -5,17 +5,22 @@ import com.example.giftrecommender.common.exception.ExceptionEnum;
 import com.example.giftrecommender.domain.entity.CrawlingProduct;
 import com.example.giftrecommender.domain.enums.Age;
 import com.example.giftrecommender.domain.enums.Gender;
+import com.example.giftrecommender.domain.enums.ProductSort;
 import com.example.giftrecommender.domain.repository.CrawlingProductRepository;
+import com.example.giftrecommender.dto.request.ConfirmBulkRequestDto;
 import com.example.giftrecommender.dto.request.ConfirmRequestDto;
 import com.example.giftrecommender.dto.request.CrawlingProductRequestDto;
 import com.example.giftrecommender.dto.request.ScoreRequestDto;
+import com.example.giftrecommender.dto.response.ConfirmBulkResponseDto;
 import com.example.giftrecommender.dto.response.ConfirmResponseDto;
 import com.example.giftrecommender.dto.response.CrawlingProductResponseDto;
 import com.example.giftrecommender.dto.response.ScoreResponseDto;
 import com.example.giftrecommender.mapper.CrawlingProductMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -101,8 +106,10 @@ public class CrawlingProductService {
             Boolean isConfirmed,
             Pageable pageable
     ) {
+        Pageable safePageable = normalizeSort(pageable);
+
         Page<CrawlingProduct> page = crawlingProductRepository.search(
-                keyword, minPrice, maxPrice, category, platform, sellerName, gender, age, isConfirmed, pageable
+                keyword, minPrice, maxPrice, category, platform, sellerName, gender, age, isConfirmed, safePageable
         );
 
         return page.map(CrawlingProductMapper::toDto);
@@ -145,6 +152,23 @@ public class CrawlingProductService {
         );
     }
 
+    /*
+     * 컨펌 상태 일괄 변경
+     */
+    @Transactional
+    public ConfirmBulkResponseDto updateConfirmStatusBulk(ConfirmBulkRequestDto request) {
+        List<Long> ids = request.ids();
+        boolean toConfirm = Boolean.TRUE.equals(request.isConfirmed());
+
+        int affected = crawlingProductRepository.bulkUpdateConfirm(ids, toConfirm);
+
+        if (affected != ids.size()) {
+            throw new ErrorException(ExceptionEnum.PRODUCT_NOT_FOUND);
+        }
+
+        return new ConfirmBulkResponseDto(affected, ids);
+    }
+
     private int calculateScore(BigDecimal rating, Integer reviewCount) {
         int score = 0;
         if (rating != null && rating.compareTo(BigDecimal.valueOf(4.2)) >= 0) {
@@ -178,7 +202,7 @@ public class CrawlingProductService {
         // 불필요한 키워드 제거
         String[] removeKeywords = {
                 "무료배송", "빠른배송", "사은품", "당일발송",
-                "세트", "세트상품", "1\\+1", "2\\+1", "3\\+1",
+                "세트", "세트상품", "1+1", "2+1", "3+1",
                 "인기", "추천", "HOT", "Best", "BEST", "신상품"
         };
         for (String keyword : removeKeywords) {
@@ -189,5 +213,35 @@ public class CrawlingProductService {
         name = name.trim().replaceAll("\\s{2,}", " ");
 
         return name;
+    }
+
+    /*
+     *   허용된 정렬만 통과 + 비어있으면 기본값(createdAt desc)
+     */
+    private Pageable normalizeSort(Pageable pageable) {
+        Sort input = pageable.getSort();
+        Sort filtered = Sort.unsorted();
+
+        if (input != null && input.isSorted()) {
+            for (Sort.Order order : input) {
+                String prop = order.getProperty();
+                if (ProductSort.isAllowed(prop)) {
+                    filtered = filtered.and(Sort.by(
+                            order.isAscending() ? Sort.Order.asc(prop) : Sort.Order.desc(prop)
+                    ));
+                }
+            }
+        }
+
+        if (filtered.isUnsorted()) {
+            filtered = ProductSort.defaultSort();
+        }
+
+        boolean hasCreatedAt = filtered.stream().anyMatch(o -> o.getProperty().equals("createdAt"));
+        if (!hasCreatedAt) {
+            filtered = filtered.and(Sort.by(Sort.Order.desc("createdAt")));
+        }
+
+        return PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(), filtered);
     }
 }
