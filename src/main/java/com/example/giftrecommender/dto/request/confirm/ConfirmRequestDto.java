@@ -1,4 +1,4 @@
-package com.example.giftrecommender.dto.request;
+package com.example.giftrecommender.dto.request.confirm;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotNull;
