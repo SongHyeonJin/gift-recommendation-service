@@ -53,4 +53,11 @@ public interface CrawlingProductRepository extends JpaRepository<CrawlingProduct
     """)
     int bulkUpdateConfirm(@Param("ids") List<Long> ids, @Param("isConfirmed") boolean isConfirmed);
 
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("update CrawlingProduct p set p.age = :age where p.id in :ids")
+    int bulkUpdateAge(@Param("ids") List<Long> ids, @Param("age") Age age);
+
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("update CrawlingProduct p set p.gender = :gender where p.id in :ids")
+    int bulkUpdateGender(@Param("ids") List<Long> ids, @Param("gender") Gender gender);
 }
