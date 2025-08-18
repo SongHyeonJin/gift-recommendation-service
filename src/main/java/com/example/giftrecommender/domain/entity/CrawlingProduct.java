@@ -119,6 +119,14 @@ public class CrawlingProduct {
         this.isConfirmed = confirmed;
     }
 
+    public void changeAge(Age age) {
+        this.age = age;
+    }
+
+    public void changeGender(Gender gender) {
+        this.gender = gender;
+    }
+
     @Builder
     public CrawlingProduct(String originalName, String displayName, Integer price, String imageUrl,
                            String productUrl, String category, List<String> keywords, Integer reviewCount,
