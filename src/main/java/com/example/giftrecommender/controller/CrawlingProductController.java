@@ -3,17 +3,24 @@ package com.example.giftrecommender.controller;
 import com.example.giftrecommender.common.BasicResponseDto;
 import com.example.giftrecommender.domain.enums.Age;
 import com.example.giftrecommender.domain.enums.Gender;
-import com.example.giftrecommender.dto.request.ConfirmBulkRequestDto;
-import com.example.giftrecommender.dto.request.ConfirmRequestDto;
-import com.example.giftrecommender.dto.request.CrawlingProductRequestDto;
-import com.example.giftrecommender.dto.request.ScoreRequestDto;
-import com.example.giftrecommender.dto.response.ConfirmBulkResponseDto;
-import com.example.giftrecommender.dto.response.ConfirmResponseDto;
-import com.example.giftrecommender.dto.response.CrawlingProductResponseDto;
-import com.example.giftrecommender.dto.response.ScoreResponseDto;
+import com.example.giftrecommender.dto.request.*;
+import com.example.giftrecommender.dto.request.age.AgeBulkRequestDto;
+import com.example.giftrecommender.dto.request.age.AgeRequestDto;
+import com.example.giftrecommender.dto.request.confirm.ConfirmBulkRequestDto;
+import com.example.giftrecommender.dto.request.confirm.ConfirmRequestDto;
+import com.example.giftrecommender.dto.request.gender.GenderBulkRequestDto;
+import com.example.giftrecommender.dto.request.gender.GenderRequestDto;
+import com.example.giftrecommender.dto.response.*;
+import com.example.giftrecommender.dto.response.age.AgeBulkResponseDto;
+import com.example.giftrecommender.dto.response.age.AgeResponseDto;
+import com.example.giftrecommender.dto.response.confirm.ConfirmBulkResponseDto;
+import com.example.giftrecommender.dto.response.confirm.ConfirmResponseDto;
+import com.example.giftrecommender.dto.response.gender.GenderBulkResponseDto;
+import com.example.giftrecommender.dto.response.gender.GenderResponseDto;
 import com.example.giftrecommender.service.CrawlingProductService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -97,6 +104,42 @@ public class CrawlingProductController {
         return ResponseEntity.ok(
                 BasicResponseDto.success("관리자 컨펌 상태 일괄 변경 완료.", result)
         );
+    }
+
+    @Operation(summary = "상품 연령대 단건 변경")
+    @PutMapping("/age")
+    public ResponseEntity<BasicResponseDto<AgeResponseDto>> updateAge(
+            @Valid @RequestBody AgeRequestDto request
+    ) {
+        AgeResponseDto result = crawlingProductService.updateAge(request);
+        return ResponseEntity.ok(BasicResponseDto.success("연령대 변경 완료", result));
+    }
+
+    @Operation(summary = "상품 연령대 일괄 변경")
+    @PutMapping("/age/bulk")
+    public ResponseEntity<BasicResponseDto<AgeBulkResponseDto>> updateAgeBulk(
+            @Valid @RequestBody AgeBulkRequestDto request
+    ) {
+        AgeBulkResponseDto result = crawlingProductService.updateAgeBulk(request);
+        return ResponseEntity.ok(BasicResponseDto.success("연령대 일괄 변경 완료", result));
+    }
+
+    @Operation(summary = "상품 성별 단건 변경")
+    @PutMapping("/gender")
+    public ResponseEntity<BasicResponseDto<GenderResponseDto>> updateGender(
+            @Valid @RequestBody GenderRequestDto request
+    ) {
+        GenderResponseDto result = crawlingProductService.updateGender(request);
+        return ResponseEntity.ok(BasicResponseDto.success("성별 변경 완료", result));
+    }
+
+    @Operation(summary = "상품 성별 일괄 변경")
+    @PutMapping("/gender/bulk")
+    public ResponseEntity<BasicResponseDto<GenderBulkResponseDto>> updateGenderBulk(
+            @Valid @RequestBody GenderBulkRequestDto request
+    ) {
+        GenderBulkResponseDto result = crawlingProductService.updateGenderBulk(request);
+        return ResponseEntity.ok(BasicResponseDto.success("성별 일괄 변경 완료", result));
     }
 
 }
