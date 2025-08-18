@@ -1,4 +1,4 @@
-package com.example.giftrecommender.dto.request;
+package com.example.giftrecommender.dto.request.confirm;
 
 import java.util.List;
 

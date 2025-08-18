@@ -7,14 +7,20 @@ import com.example.giftrecommender.domain.enums.Age;
 import com.example.giftrecommender.domain.enums.Gender;
 import com.example.giftrecommender.domain.enums.ProductSort;
 import com.example.giftrecommender.domain.repository.CrawlingProductRepository;
-import com.example.giftrecommender.dto.request.ConfirmBulkRequestDto;
-import com.example.giftrecommender.dto.request.ConfirmRequestDto;
-import com.example.giftrecommender.dto.request.CrawlingProductRequestDto;
-import com.example.giftrecommender.dto.request.ScoreRequestDto;
-import com.example.giftrecommender.dto.response.ConfirmBulkResponseDto;
-import com.example.giftrecommender.dto.response.ConfirmResponseDto;
-import com.example.giftrecommender.dto.response.CrawlingProductResponseDto;
-import com.example.giftrecommender.dto.response.ScoreResponseDto;
+import com.example.giftrecommender.dto.request.*;
+import com.example.giftrecommender.dto.request.age.AgeBulkRequestDto;
+import com.example.giftrecommender.dto.request.age.AgeRequestDto;
+import com.example.giftrecommender.dto.request.confirm.ConfirmBulkRequestDto;
+import com.example.giftrecommender.dto.request.confirm.ConfirmRequestDto;
+import com.example.giftrecommender.dto.request.gender.GenderBulkRequestDto;
+import com.example.giftrecommender.dto.request.gender.GenderRequestDto;
+import com.example.giftrecommender.dto.response.*;
+import com.example.giftrecommender.dto.response.age.AgeBulkResponseDto;
+import com.example.giftrecommender.dto.response.age.AgeResponseDto;
+import com.example.giftrecommender.dto.response.confirm.ConfirmBulkResponseDto;
+import com.example.giftrecommender.dto.response.confirm.ConfirmResponseDto;
+import com.example.giftrecommender.dto.response.gender.GenderBulkResponseDto;
+import com.example.giftrecommender.dto.response.gender.GenderResponseDto;
 import com.example.giftrecommender.mapper.CrawlingProductMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -33,7 +39,7 @@ public class CrawlingProductService {
 
     private final CrawlingProductRepository crawlingProductRepository;
 
-    /**
+    /*
      * 단건 저장
      */
     @Transactional
@@ -59,7 +65,7 @@ public class CrawlingProductService {
         return CrawlingProductMapper.toDto(savedProduct);
     }
 
-    /**
+    /*
      * 여러건 저장
      */
     @Transactional
@@ -90,7 +96,7 @@ public class CrawlingProductService {
                 .toList();
     }
 
-    /**
+    /*
      * 페이징 조회 + 동적 검색
      */
     @Transactional(readOnly = true)
@@ -169,6 +175,59 @@ public class CrawlingProductService {
         return new ConfirmBulkResponseDto(affected, ids);
     }
 
+    /*
+     * 연령대 단건 변경
+     */
+    @Transactional
+    public AgeResponseDto updateAge(AgeRequestDto request) {
+        CrawlingProduct product = crawlingProductRepository.findById(request.id())
+                .orElseThrow(() -> new ErrorException(ExceptionEnum.PRODUCT_NOT_FOUND));
+
+        product.changeAge(request.age());
+
+        return new AgeResponseDto(product.getId(), product.getAge());
+    }
+
+    /*
+     * 연령대 일괄 변경
+     */
+    @Transactional
+    public AgeBulkResponseDto updateAgeBulk(AgeBulkRequestDto request) {
+        int affected = crawlingProductRepository.bulkUpdateAge(request.ids(), request.age());
+
+        if (affected != request.ids().size()) {
+            throw new ErrorException(ExceptionEnum.PRODUCT_NOT_FOUND);
+        }
+
+        return new AgeBulkResponseDto(affected, request.ids(), request.age());
+    }
+
+    /*
+     * 성별 단건 변경
+     */
+    @Transactional
+    public GenderResponseDto updateGender(GenderRequestDto request) {
+        CrawlingProduct product = crawlingProductRepository.findById(request.id())
+                .orElseThrow(() -> new ErrorException(ExceptionEnum.PRODUCT_NOT_FOUND));
+
+        product.changeGender(request.gender());
+        return new GenderResponseDto(product.getId(), product.getGender());
+    }
+
+    /*
+     * 성별 일괄 변경
+     */
+    @Transactional
+    public GenderBulkResponseDto updateGenderBulk(GenderBulkRequestDto request) {
+        int affected = crawlingProductRepository.bulkUpdateGender(request.ids(), request.gender());
+
+        if (affected != request.ids().size()) {
+            throw new ErrorException(ExceptionEnum.PRODUCT_NOT_FOUND);
+        }
+
+        return new GenderBulkResponseDto(affected, request.ids(), request.gender());
+    }
+
     private int calculateScore(BigDecimal rating, Integer reviewCount) {
         int score = 0;
         if (rating != null && rating.compareTo(BigDecimal.valueOf(4.2)) >= 0) {
@@ -202,7 +261,7 @@ public class CrawlingProductService {
         // 불필요한 키워드 제거
         String[] removeKeywords = {
                 "무료배송", "빠른배송", "사은품", "당일발송",
-                "세트", "세트상품", "1+1", "2+1", "3+1",
+                "세트", "세트상품", "1\\+1", "2\\+1", "3\\+1",
                 "인기", "추천", "HOT", "Best", "BEST", "신상품"
         };
         for (String keyword : removeKeywords) {
