@@ -10,6 +10,8 @@ import com.example.giftrecommender.dto.request.confirm.ConfirmBulkRequestDto;
 import com.example.giftrecommender.dto.request.confirm.ConfirmRequestDto;
 import com.example.giftrecommender.dto.request.gender.GenderBulkRequestDto;
 import com.example.giftrecommender.dto.request.gender.GenderRequestDto;
+import com.example.giftrecommender.dto.request.product.CrawlingProductRequestDto;
+import com.example.giftrecommender.dto.request.product.CrawlingProductUpdateRequestDto;
 import com.example.giftrecommender.dto.response.*;
 import com.example.giftrecommender.dto.response.age.AgeBulkResponseDto;
 import com.example.giftrecommender.dto.response.age.AgeResponseDto;
@@ -71,6 +73,15 @@ public class CrawlingProductController {
         return ResponseEntity.ok(
                 BasicResponseDto.success("크롤링 상품 목록 조회 완료.", page)
         );
+    }
+
+    @Operation(summary = "상품 단건 부분 수정 (PATCH)")
+    @PatchMapping("/{product_id}")
+    public ResponseEntity<BasicResponseDto<CrawlingProductResponseDto>> patchProduct(
+            @PathVariable(name = "product_id") Long productId,
+            @Valid @RequestBody CrawlingProductUpdateRequestDto requestDto
+    ) {
+        return ResponseEntity.ok(BasicResponseDto.success("상품이 수정되었습니다.", crawlingProductService.updateProduct(productId, requestDto)));
     }
 
     @Operation(summary = "관리자 점수 부여 (adminCheck 자동 true)")
