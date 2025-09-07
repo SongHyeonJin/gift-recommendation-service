@@ -14,6 +14,8 @@ import com.example.giftrecommender.dto.request.confirm.ConfirmBulkRequestDto;
 import com.example.giftrecommender.dto.request.confirm.ConfirmRequestDto;
 import com.example.giftrecommender.dto.request.gender.GenderBulkRequestDto;
 import com.example.giftrecommender.dto.request.gender.GenderRequestDto;
+import com.example.giftrecommender.dto.request.product.CrawlingProductRequestDto;
+import com.example.giftrecommender.dto.request.product.CrawlingProductUpdateRequestDto;
 import com.example.giftrecommender.dto.response.*;
 import com.example.giftrecommender.dto.response.age.AgeBulkResponseDto;
 import com.example.giftrecommender.dto.response.age.AgeResponseDto;
@@ -120,6 +122,68 @@ public class CrawlingProductService {
 
         return page.map(CrawlingProductMapper::toDto);
     }
+
+    /*
+     * 단건 부분 수정 (보낸 값만 적용)
+     */
+    @Transactional
+    public CrawlingProductResponseDto updateProduct(Long productId, CrawlingProductUpdateRequestDto requestDto) {
+        CrawlingProduct product = crawlingProductRepository.findById(productId)
+                .orElseThrow(() -> new ErrorException(ExceptionEnum.PRODUCT_NOT_FOUND));
+
+        // displayName
+        if (requestDto.originalName() != null) {
+            String originalName = requestDto.originalName();
+
+            product.changeOriginalName(originalName);
+            product.changeDisplayName(generateDisplayName(originalName));
+        }
+
+        // price
+        if (requestDto.price() != null) {
+            if (requestDto.price() < 0) throw new ErrorException(ExceptionEnum.INVALID_REQUEST);
+            product.changePrice(requestDto.price());
+        }
+
+        // imageUrl / productUrl
+        if (requestDto.imageUrl() != null) product.changeImageUrl(requestDto.imageUrl().trim());
+        if (requestDto.productUrl() != null) product.changeProductUrl(requestDto.productUrl().trim());
+
+        // category
+        if (requestDto.category() != null) {
+            product.changeCategory(requestDto.category().trim());
+        }
+
+        // keywords
+        if (requestDto.keywords() != null) {
+            List<String> normalized = normalizeKeywords(requestDto.keywords());
+            product.changeKeywords(normalized);
+        }
+
+        // sellerName / platform
+        if (requestDto.sellerName() != null) product.changeSellerName(requestDto.sellerName().trim());
+        if (requestDto.platform() != null) product.changePlatform(requestDto.platform().trim());
+
+        // gender
+        if (requestDto.gender() != null) {
+            product.changeGender(parseGender(requestDto.gender()));
+        }
+
+        // age
+        if (requestDto.age() != null) {
+            product.changeAge(parseAge(requestDto.age()));
+        }
+
+        // isConfirmed
+        if (requestDto.isConfirmed() != null) {
+            product.changeConfirmed(requestDto.isConfirmed());
+        }
+
+        validatePrice(product.getPrice());
+
+        return CrawlingProductMapper.toDto(product);
+    }
+
 
     /*
      * 점수 부여 + adminCheck true
@@ -303,4 +367,36 @@ public class CrawlingProductService {
 
         return PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(), filtered);
     }
+
+    private void validatePrice(Integer price) {
+        if (price != null && price < 0) throw new ErrorException(ExceptionEnum.INVALID_REQUEST);
+    }
+
+    private List<String> normalizeKeywords(List<String> kws) {
+        return kws.stream()
+                .map(String::trim)
+                .filter(s -> !s.isBlank())
+                .map(s -> s.length() > 30 ? s.substring(0, 30) : s)
+                .distinct()
+                .toList();
+    }
+
+    private static Gender parseGender(String raw) {
+        if (raw == null) return null;
+        try {
+            return Gender.valueOf(raw.trim().toUpperCase());
+        } catch (IllegalArgumentException e) {
+            throw new ErrorException(ExceptionEnum.INVALID_REQUEST);
+        }
+    }
+
+    private static Age parseAge(String raw) {
+        if (raw == null) return null;
+        try {
+            return Age.valueOf(raw.trim().toUpperCase());
+        } catch (IllegalArgumentException e) {
+            throw new ErrorException(ExceptionEnum.INVALID_REQUEST);
+        }
+    }
+
 }

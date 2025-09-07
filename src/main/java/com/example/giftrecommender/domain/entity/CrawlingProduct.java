@@ -126,6 +126,15 @@ public class CrawlingProduct {
     public void changeGender(Gender gender) {
         this.gender = gender;
     }
+    public void changeOriginalName(String originalName) { this.originalName = originalName; }
+    public void changeDisplayName(String displayName) { this.displayName = displayName; }
+    public void changePrice(Integer price) { this.price = price; }
+    public void changeImageUrl(String imageUrl) { this.imageUrl = imageUrl; }
+    public void changeProductUrl(String productUrl) { this.productUrl = productUrl; }
+    public void changeCategory(String category) { this.category = category; }
+    public void changeKeywords(List<String> keywords) { this.keywords = keywords; }
+    public void changeSellerName(String sellerName) { this.sellerName = sellerName; }
+    public void changePlatform(String platform) { this.platform = platform; }
 
     @Builder
     public CrawlingProduct(String originalName, String displayName, Integer price, String imageUrl,
