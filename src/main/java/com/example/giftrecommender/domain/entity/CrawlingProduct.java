@@ -37,7 +37,7 @@ public class CrawlingProduct {
     private String imageUrl;
 
     // 상품 상세 페이지 링크
-    @Column(columnDefinition = "TEXT")
+    @Column(name = "product_url", nullable = false, length = 512, unique = true)
     private String productUrl;
 
     // 카테고리명
