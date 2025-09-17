@@ -19,6 +19,8 @@ import com.example.giftrecommender.dto.response.confirm.ConfirmBulkResponseDto;
 import com.example.giftrecommender.dto.response.confirm.ConfirmResponseDto;
 import com.example.giftrecommender.dto.response.gender.GenderBulkResponseDto;
 import com.example.giftrecommender.dto.response.gender.GenderResponseDto;
+import com.example.giftrecommender.dto.response.product.CrawlingProductBulkSaveResponseDto;
+import com.example.giftrecommender.service.CrawlingProductSaver;
 import com.example.giftrecommender.service.CrawlingProductService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -40,17 +42,22 @@ import java.util.List;
 public class CrawlingProductController {
 
     private final CrawlingProductService crawlingProductService;
+    private final CrawlingProductSaver crawlingProductSaver;
 
     @Operation(summary = "크롤링 상품 저장")
     @PostMapping
     public ResponseEntity<BasicResponseDto<CrawlingProductResponseDto>> save(@RequestBody CrawlingProductRequestDto requestDto) {
-        return ResponseEntity.ok(BasicResponseDto.success("크롤링 상품 저장 완료.", crawlingProductService.save(requestDto)));
+        return ResponseEntity.ok(BasicResponseDto.success("크롤링 상품 저장 완료.", crawlingProductSaver.save(requestDto)));
     }
 
-    @Operation(summary = "크롤링 상품 여러 건 저장")
+    @Operation(summary = "크롤링 상품 여러 건 저장(부분 성공 정책)")
     @PostMapping("/bulk")
-    public ResponseEntity<List<CrawlingProductResponseDto>> saveAll(@RequestBody List<CrawlingProductRequestDto> requestDtoList) {
-        return ResponseEntity.ok(crawlingProductService.saveAll(requestDtoList));
+    public ResponseEntity<BasicResponseDto<CrawlingProductBulkSaveResponseDto>> saveAll(
+            @RequestBody List<CrawlingProductRequestDto> requestDtoList
+    ) {
+        return ResponseEntity.ok(
+                BasicResponseDto.success("크롤링 상품 여러 건 저장완료(부분 성공 정책)", crawlingProductService.saveAll(requestDtoList))
+        );
     }
 
     @Operation(summary = "크롤링 상품 목록 조회 (필터/정렬/페이징)")
