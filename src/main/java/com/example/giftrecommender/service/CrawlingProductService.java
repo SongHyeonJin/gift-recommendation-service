@@ -4,6 +4,7 @@ import com.example.giftrecommender.common.exception.ErrorException;
 import com.example.giftrecommender.common.exception.ExceptionEnum;
 import com.example.giftrecommender.domain.entity.CrawlingProduct;
 import com.example.giftrecommender.domain.enums.Age;
+import com.example.giftrecommender.domain.enums.BulkStatus;
 import com.example.giftrecommender.domain.enums.Gender;
 import com.example.giftrecommender.domain.enums.ProductSort;
 import com.example.giftrecommender.domain.repository.CrawlingProductRepository;
@@ -23,79 +24,164 @@ import com.example.giftrecommender.dto.response.confirm.ConfirmBulkResponseDto;
 import com.example.giftrecommender.dto.response.confirm.ConfirmResponseDto;
 import com.example.giftrecommender.dto.response.gender.GenderBulkResponseDto;
 import com.example.giftrecommender.dto.response.gender.GenderResponseDto;
+import com.example.giftrecommender.dto.response.product.BulkItemResultDto;
+import com.example.giftrecommender.dto.response.product.BulkSummaryDto;
+import com.example.giftrecommender.dto.response.product.CrawlingProductBulkSaveResponseDto;
 import com.example.giftrecommender.mapper.CrawlingProductMapper;
+import jakarta.validation.ConstraintViolationException;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.core.NestedExceptionUtils;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.TransactionSystemException;
+import org.springframework.transaction.UnexpectedRollbackException;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.sql.SQLIntegrityConstraintViolationException;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class CrawlingProductService {
 
     private final CrawlingProductRepository crawlingProductRepository;
-
-    /*
-     * 단건 저장
-     */
-    @Transactional
-    public CrawlingProductResponseDto save(CrawlingProductRequestDto requestDto) {
-        int score = calculateScore(requestDto.rating(), requestDto.reviewCount());
-
-        CrawlingProduct product = CrawlingProduct.builder()
-                .originalName(requestDto.originalName())
-                .displayName(generateDisplayName(requestDto.originalName())) // 노출용 이름 생성
-                .price(requestDto.price())
-                .imageUrl(requestDto.imageUrl())
-                .productUrl(requestDto.productUrl())
-                .category(requestDto.category())
-                .keywords(requestDto.keywords())
-                .reviewCount(requestDto.reviewCount())
-                .rating(requestDto.rating())
-                .score(score)
-                .sellerName(requestDto.sellerName())
-                .platform(requestDto.platform())
-                .build();
-
-        CrawlingProduct savedProduct = crawlingProductRepository.save(product);
-        return CrawlingProductMapper.toDto(savedProduct);
-    }
+    private final CrawlingProductSaver crawlingProductSaver;
 
     /*
      * 여러건 저장
      */
-    @Transactional
-    public List<CrawlingProductResponseDto> saveAll(List<CrawlingProductRequestDto> requestDtoList) {
-        List<CrawlingProduct> products = requestDtoList.stream()
-                .map(dto -> {
-                    int score = calculateScore(dto.rating(), dto.reviewCount());
-                    return CrawlingProduct.builder()
-                            .originalName(dto.originalName())
-                            .displayName(generateDisplayName(dto.originalName()))
-                            .price(dto.price())
-                            .imageUrl(dto.imageUrl())
-                            .productUrl(dto.productUrl())
-                            .category(dto.category())
-                            .keywords(dto.keywords())
-                            .reviewCount(dto.reviewCount())
-                            .rating(dto.rating())
-                            .sellerName(dto.sellerName())
-                            .platform(dto.platform())
-                            .score(score)
-                            .build();
-                })
-                .toList();
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    public CrawlingProductBulkSaveResponseDto saveAll(List<CrawlingProductRequestDto> requestDtoList) {
+        int success = 0, duplicated = 0, failed = 0;
+        List<BulkItemResultDto> results = new ArrayList<>();
 
-        List<CrawlingProduct> savedList = crawlingProductRepository.saveAll(products);
-        return savedList.stream()
-                .map(CrawlingProductMapper::toDto)
-                .toList();
+        for (CrawlingProductRequestDto dto : requestDtoList) {
+            try {
+                // 건별 신규 트랜잭션 (@Transactional(REQUIRES_NEW))인 다른 빈 호출
+                CrawlingProductResponseDto savedDto = crawlingProductSaver.save(dto);
+
+                results.add(new BulkItemResultDto(
+                        dto.productUrl(),
+                        BulkStatus.SUCCESS,
+                        null,
+                        null,
+                        savedDto.id(),
+                        savedDto
+                ));
+                success++;
+
+            } catch (TransactionSystemException tse) {
+                Throwable root = NestedExceptionUtils.getMostSpecificCause(tse);
+
+                if (root instanceof ConstraintViolationException cve) {
+                    results.add(new BulkItemResultDto(
+                            dto.productUrl(),
+                            BulkStatus.FAILED,
+                            "VALIDATION_ERROR",
+                            joinViolationMsgs(cve),
+                            null,
+                            null
+                    ));
+                    failed++;
+                } else if (root instanceof SQLIntegrityConstraintViolationException
+                        || containsDuplicateKeyword(root != null ? root.getMessage() : null)) {
+                    // 중복: 내부 원문 노출 금지 → 표준 코드/메시지로 치환
+                    results.add(new BulkItemResultDto(
+                            dto.productUrl(),
+                            BulkStatus.DUPLICATED,
+                            "DUPLICATE_KEY",
+                            "이미 존재하는 URL",
+                            null,
+                            null
+                    ));
+                    duplicated++;
+                } else {
+                    // 기타 트랜잭션 포장 예외
+                    results.add(new BulkItemResultDto(
+                            dto.productUrl(),
+                            BulkStatus.FAILED,
+                            "TRANSACTION_ERROR",
+                            "트랜잭션 처리 중 오류가 발생했습니다",
+                            null,
+                            null
+                    ));
+                    failed++;
+                }
+
+            } catch (DataIntegrityViolationException dive) {
+                if (isUniqueViolation(dive)) {
+                    results.add(new BulkItemResultDto(
+                            dto.productUrl(),
+                            BulkStatus.DUPLICATED,
+                            "DUPLICATE_KEY",
+                            "이미 존재하는 URL",
+                            null,
+                            null
+                    ));
+                    duplicated++;
+                } else {
+                    results.add(new BulkItemResultDto(
+                            dto.productUrl(),
+                            BulkStatus.FAILED,
+                            "INTEGRITY_VIOLATION",
+                            "데이터 무결성 제약 위반",
+                            null,
+                            null
+                    ));
+                    failed++;
+                }
+
+            } catch (ConstraintViolationException cve) {
+                results.add(new BulkItemResultDto(
+                        dto.productUrl(),
+                        BulkStatus.FAILED,
+                        "VALIDATION_ERROR",
+                        joinViolationMsgs(cve),
+                        null,
+                        null
+                ));
+                failed++;
+
+            } catch (UnexpectedRollbackException ure) {
+                results.add(new BulkItemResultDto(
+                        dto.productUrl(),
+                        BulkStatus.FAILED,
+                        "TRANSACTION_ROLLBACK",
+                        "트랜잭션이 롤백되었습니다",
+                        null,
+                        null
+                ));
+                failed++;
+
+            } catch (Exception e) {
+                // 마지막 방어: 내부 상세는 로그로만
+                // log.error("Bulk save item failed. url={}, cause={}", dto.productUrl(), rootMessage(e));
+                results.add(new BulkItemResultDto(
+                        dto.productUrl(),
+                        BulkStatus.FAILED,
+                        "UNEXPECTED_ERROR",
+                        "예상치 못한 오류가 발생했습니다",
+                        null,
+                        null
+                ));
+                failed++;
+            }
+        }
+
+        return new CrawlingProductBulkSaveResponseDto(
+                new BulkSummaryDto(requestDtoList.size(), success, duplicated, failed),
+                results
+        );
     }
 
     /*
@@ -371,6 +457,31 @@ public class CrawlingProductService {
     private void validatePrice(Integer price) {
         if (price != null && price < 0) throw new ErrorException(ExceptionEnum.INVALID_REQUEST);
     }
+
+    private boolean isUniqueViolation(DataIntegrityViolationException e) {
+        Throwable root = NestedExceptionUtils.getMostSpecificCause(e);
+        if (root instanceof java.sql.SQLException se) {
+            String sqlState = se.getSQLState(); // MySQL: 23000
+            int vendorCode = se.getErrorCode(); // MySQL: 1062
+            if ("23000".equals(sqlState) || vendorCode == 1062) return true;
+        }
+        String msg = root != null ? root.getMessage() : e.getMessage();
+        return containsDuplicateKeyword(msg);
+    }
+
+    private boolean containsDuplicateKeyword(String msg) {
+        if (msg == null) return false;
+        String m = msg.toLowerCase();
+        return m.contains("duplicate") || m.contains("unique") || m.contains("uq");
+    }
+
+    private String joinViolationMsgs(ConstraintViolationException e) {
+        return e.getConstraintViolations().stream()
+                .map(v -> v.getPropertyPath() + ": " + v.getMessage())
+                .distinct()
+                .collect(Collectors.joining("; "));
+    }
+
 
     private List<String> normalizeKeywords(List<String> kws) {
         return kws.stream()
