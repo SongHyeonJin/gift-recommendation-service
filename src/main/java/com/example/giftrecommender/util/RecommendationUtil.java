@@ -1,5 +1,6 @@
 package com.example.giftrecommender.util;
 
+import java.math.BigDecimal;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -60,6 +61,52 @@ public class RecommendationUtil {
 
     public static boolean allowBabyProduct(String title, String age, String reason, String preference) {
         return !isBabyKeywordIncluded(title) || "10대 미만".equals(age) || "출산".equals(reason) || "출산/육아".equals(preference);
+    }
+
+    public static int calculateScore(BigDecimal rating, Integer reviewCount) {
+        int score = 0;
+        if (rating != null && rating.compareTo(BigDecimal.valueOf(4.2)) >= 0) {
+            score += 1;
+        }
+        if (reviewCount != null && reviewCount >= 100) {
+            score += 1;
+        }
+        if (reviewCount != null && reviewCount >= 1000 && rating != null && rating.compareTo(BigDecimal.valueOf(4.5)) >= 0) {
+            score += 1;
+        }
+        if (reviewCount != null && reviewCount >= 10000 && rating != null && rating.compareTo(BigDecimal.valueOf(4.3)) >= 0) {
+            score += 1;
+        }
+        return score;
+    }
+
+    public static String generateDisplayName(String originalName) {
+        if (originalName == null) return null;
+
+        String name = originalName;
+
+        // 대괄호, 소괄호, 중괄호 안 내용 제거
+        name = name.replaceAll("\\[.*?\\]", "")
+                .replaceAll("\\(.*?\\)", "")
+                .replaceAll("\\{.*?\\}", "");
+
+        // 특수문자/장식 기호 제거
+        name = name.replaceAll("[★♥●◆◎※]", "");
+
+        // 불필요한 키워드 제거
+        String[] removeKeywords = {
+                "무료배송", "빠른배송", "사은품", "당일발송",
+                "세트", "세트상품", "1\\+1", "2\\+1", "3\\+1",
+                "인기", "추천", "HOT", "Best", "BEST", "신상품"
+        };
+        for (String keyword : removeKeywords) {
+            name = name.replaceAll("(?i)" + keyword, ""); // 대소문자 무시
+        }
+
+        // 앞뒤 공백 및 중복 공백 제거
+        name = name.trim().replaceAll("\\s{2,}", " ");
+
+        return name;
     }
 
 }
