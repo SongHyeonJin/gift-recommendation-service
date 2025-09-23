@@ -7,3 +7,17 @@ spring:
     properties:
       hibernate:
         format_sql: true
+server:
+  shutdown: graceful
+  lifecycle:
+    timeout-per-shutdown-phase: 30s
+
+qdrant:
+  http-base-url: ${QDRANT__HTTP_BASE_URL:}
+  tls: ${QDRANT__TLS:}
+  grpc:
+    host: ${QDRANT__GRPC__HOST:}
+    port: ${QDRANT__GRPC__PORT:}
+
+openai:
+  enabled: true
