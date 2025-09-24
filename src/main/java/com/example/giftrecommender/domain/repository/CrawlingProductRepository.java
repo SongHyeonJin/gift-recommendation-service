@@ -60,4 +60,11 @@ public interface CrawlingProductRepository extends JpaRepository<CrawlingProduct
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("update CrawlingProduct p set p.gender = :gender where p.id in :ids")
     int bulkUpdateGender(@Param("ids") List<Long> ids, @Param("gender") Gender gender);
+
+    @Modifying(clearAutomatically = true)
+    @Query("update CrawlingProduct p set p.embeddingReady = true where p.id = :id")
+    int markEmbeddingReady(@Param("id") Long id);
+
+    @Query("select p.embeddingReady from CrawlingProduct p where p.id = :id")
+    Boolean isEmbeddingReady(@Param("id") Long id);
 }

@@ -12,6 +12,9 @@ public record CrawlingProductRequestDto(
         @NotBlank
         String originalName,
 
+        @Schema(description = "노출 상품명", example = "마카롱 3구 USB 고용량 큐브 멀티탭 1.5m")
+        String displayName,
+
         @Schema(description = "가격 (원 단위)", example = "15900")
         @NotNull
         @PositiveOrZero
@@ -47,33 +50,3 @@ public record CrawlingProductRequestDto(
 
 ) {}
 
-/*
-여러건 등록 예시
-[
-  {
-    "originalName": "무아스 큐브 멀티탭",
-    "price": 29000,
-    "imageUrl": "https://example.com/image.jpg",
-    "productUrl": "https://example.com/product",
-    "category": "디자인문구",
-    "keywords": ["멀티탭", "usb", "귀여움"],
-    "reviewCount": 150,
-    "rating": 4.5,
-    "sellerName": "무아스",
-    "platform": "텐바이텐"
-  },
-  {
-    "originalName": "스누피 무드등",
-    "price": 19900,
-    "imageUrl": "https://example.com/snoopy.jpg",
-    "productUrl": "https://example.com/snoopy",
-    "category": "무드등",
-    "keywords": ["조명", "선물", "귀여움"],
-    "reviewCount": 80,
-    "rating": 4.2,
-    "sellerName": "라이팅샵",
-    "platform": "네이버"
-  }
-]
-
- */

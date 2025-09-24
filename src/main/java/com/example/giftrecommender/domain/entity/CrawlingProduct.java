@@ -74,6 +74,19 @@ public class CrawlingProduct {
     @Column(name = "admin_check")
     private Boolean adminCheck = false;
 
+    // 관리자 컨펌 여부
+    @Column(name = "is_confirmed")
+    private Boolean isConfirmed = false;
+
+    @Column(name = "vector_point_id", length = 100)
+    private String vectorPointId;
+
+    @Column(name = "embedding_model", length = 50)
+    private String embeddingModel;
+
+    @Column(name = "embedding_ready")
+    private Boolean embeddingReady = false;
+
     // 성별 태그
     @Enumerated(EnumType.STRING)
     @Column(length = 10)
@@ -83,10 +96,6 @@ public class CrawlingProduct {
     @Enumerated(EnumType.STRING)
     @Column(length = 15)
     private Age age = Age.NONE;
-
-    // 관리자 컨펌 여부
-    @Column(name = "is_confirmed")
-    private Boolean isConfirmed = false;
 
     // 생성/수정 시각
     @Column(name = "created_at", nullable = false)
@@ -135,6 +144,14 @@ public class CrawlingProduct {
     public void changeKeywords(List<String> keywords) { this.keywords = keywords; }
     public void changeSellerName(String sellerName) { this.sellerName = sellerName; }
     public void changePlatform(String platform) { this.platform = platform; }
+    public void markEmbedding(String pointId, String model, boolean ready) {
+        this.vectorPointId = pointId;
+        this.embeddingModel = model;
+        this.embeddingReady = ready;
+    }
+    public void markEmbeddingReady() {
+        this.embeddingReady = true;
+    }
 
     @Builder
     public CrawlingProduct(String originalName, String displayName, Integer price, String imageUrl,
