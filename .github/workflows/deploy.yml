@@ -34,61 +34,74 @@ jobs:
           echo "${{ secrets.EC2_KEY }}" > ec2_key.pem
           chmod 600 ec2_key.pem
 
-      - name: Copy JAR, secret yml, docker-compose.yml to EC2
+      - name: Copy artifacts to EC2
         run: |
           scp -i ec2_key.pem -o StrictHostKeyChecking=no \
             build/libs/giftrecommender-0.0.1-SNAPSHOT.jar \
             src/main/resources/application-secret.yml \
             docker-compose.yml \
-            ${{ secrets.EC2_USERNAME }}@${{ secrets.EC2_HOST }}:/home/${{ secrets.EC2_USERNAME }}/
+            ${{ secrets.EC2_USERNAME }}@${{ secrets.EC2_HOST }}:~
 
       - name: SSH into EC2 and deploy
-        env:
-          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
-          EC2_HOST: ${{ secrets.EC2_HOST }}
-          NAVER_CLIENT_ID: ${{ secrets.NAVER_CLIENT_ID }}
-          NAVER_CLIENT_SECRET: ${{ secrets.NAVER_CLIENT_SECRET }}
         run: |
           ssh -i ec2_key.pem -o StrictHostKeyChecking=no \
-              ${{ secrets.EC2_USERNAME }}@${{ secrets.EC2_HOST }} << 'EOF'
+            ${{ secrets.EC2_USERNAME }}@${{ secrets.EC2_HOST }} << 'EOF'
+          set -euo pipefail
 
-            set -euo pipefail
+          # -------- inject secrets into remote session --------
+          export EC2_HOST="${{ secrets.EC2_HOST }}"
+          export DB_PASSWORD="${{ secrets.DB_PASSWORD }}"
+          export NAVER_CLIENT_ID="${{ secrets.NAVER_CLIENT_ID }}"
+          export NAVER_CLIENT_SECRET="${{ secrets.NAVER_CLIENT_SECRET }}"
+          export OPENAI_API_KEY="${{ secrets.OPENAI_API_KEY }}"
 
-            echo "[INFO] Ensure Docker & Compose & curl installed"
-            if ! command -v docker >/dev/null 2>&1; then
-              if command -v apt-get >/dev/null 2>&1; then
-                sudo apt-get update -y
-                sudo apt-get install -y docker.io
-              else
-                sudo yum install -y docker
-              fi
-              sudo systemctl enable docker
-              sudo systemctl start docker
+          echo "[INFO] Ensure Docker, Compose plugin, curl, Java"
+          if ! command -v docker >/dev/null 2>&1; then
+            if command -v apt-get >/dev/null 2>&1; then
+              sudo apt-get update -y
+              sudo apt-get install -y docker.io
+            else
+              sudo yum install -y docker
             fi
-            if ! sudo docker compose version >/dev/null 2>&1; then
-              if command -v apt-get >/dev/null 2>&1; then
-                sudo apt-get install -y docker-compose-plugin || true
-              else
-                sudo yum install -y docker-compose-plugin || true
-              fi
+            sudo systemctl enable docker
+            sudo systemctl start docker
+          fi
+          if ! sudo docker compose version >/dev/null 2>&1; then
+            if command -v apt-get >/dev/null 2>&1; then
+              sudo apt-get install -y docker-compose-plugin || true
+            else
+              sudo yum install -y docker-compose-plugin || true
             fi
-            if ! command -v curl >/dev/null 2>&1; then
-              if command -v apt-get >/dev/null 2>&1; then
-                sudo apt-get install -y curl
-              else
-                sudo yum install -y curl
-              fi
+          fi
+          if ! command -v curl >/dev/null 2>&1; then
+            if command -v apt-get >/dev/null 2>&1; then
+              sudo apt-get install -y curl
+            else
+              sudo yum install -y curl
             fi
+          fi
+          if ! command -v java >/dev/null 2>&1; then
+            if command -v apt-get >/dev/null 2>&1; then
+              sudo apt-get update -y && sudo apt-get install -y openjdk-21-jre
+            else
+              sudo yum install -y java-21-amazon-corretto-headless || sudo dnf install -y java-21-openjdk
+            fi
+          fi
 
-            # Qdrant 데이터 디렉토리 준비
-            sudo mkdir -p /var/qdrant/storage
-            # 권한 기본(root)로 충분, 필요시 퍼미션 조정 가능
-            # sudo chown root:root -R /var/qdrant
+          # -------- Qdrant bring-up (idempotent) --------
+          sudo mkdir -p /var/qdrant/storage
+          cd "$HOME"
 
-            cd /home/${USER}
-
-            echo "[INFO] Start/Ensure Qdrant container"
-            sudo docker compose -f docker-compose.yml up -d
+          if sudo docker ps --format '{{.Names}}' | grep -q '^qdrant$'; then
+            echo "[INFO] Qdrant already running. Skipping compose up."
+          else
+            if sudo docker ps -a --format '{{.Names}}' | grep -q '^qdrant$'; then
+              echo "[INFO] Qdrant container exists but not running. Starting..."
+              sudo docker start qdrant
+            else
+              echo "[INFO] Qdrant not present. Bringing up via docker-compose.yml"
+              sudo docker compose -f docker-compose.yml up -d
+            fi
 
             echo "[INFO] Wait for Qdrant health"
             for i in {1..30}; do
@@ -105,59 +118,63 @@ jobs:
                 exit 1
               fi
             done
+          fi
 
-            echo "[INFO] Write application-secret.yml for prod profile"
-            cat > /home/${USER}/application-secret.yml <<EOT
-            spring:
-              config:
-                activate:
-                  on-profile: prod
+          echo "[INFO] Write application-secret.yml (template + envsubst)"
+          cat > "$HOME/application-secret.yml.tmpl" <<'EOT'
+          spring:
+            config:
+              activate:
+                on-profile: prod
+            datasource:
+              url: jdbc:mysql://${EC2_HOST}:3306/gift_recommendation?allowPublicKeyRetrieval=true&useSSL=false&serverTimezone=Asia/Seoul&characterEncoding=UTF-8
+              password: "${DB_PASSWORD}"
+            redis:
+              host: "${EC2_HOST}"
+              port: 6379
+          naver:
+            client-id: "${NAVER_CLIENT_ID}"
+            client-secret: "${NAVER_CLIENT_SECRET}"
+          openai:
+            api:
+              key: "${OPENAI_API_KEY}"
+          EOT
 
-              datasource:
-                url: jdbc:mysql://${EC2_HOST}:3306/gift_recommendation?allowPublicKeyRetrieval=true&useSSL=false&serverTimezone=Asia/Seoul&characterEncoding=UTF-8
-                password: "${DB_PASSWORD}"
+          # 변수 치환 적용
+          envsubst < "$HOME/application-secret.yml.tmpl" > "$HOME/application-secret.yml"
 
-              redis:
-                host: "${EC2_HOST}"
-                port: 6379
+          echo "[INFO] Stop existing Spring Boot application (if any)"
+          PID=$(pgrep -f 'giftrecommender-0.0.1-SNAPSHOT.jar' || true)
+          if [ -n "$PID" ]; then
+            kill -15 $PID || true
+            for i in {1..60}; do
+              sleep 1
+              if ! ps -p $PID >/dev/null; then
+                echo "[INFO] Process $PID terminated"
+                break
+              fi
+              if [ "$i" -eq 60 ]; then
+                echo "[WARN] Force killing $PID"
+                kill -9 $PID || true
+              fi
+            done
+          else
+            echo "[INFO] No existing process"
+          fi
 
-            naver:
-              client-id: "${NAVER_CLIENT_ID}"
-              client-secret: "${NAVER_CLIENT_SECRET}"
-            EOT
+          echo "[INFO] Start Spring Boot (point to local Qdrant)"
+          export QDRANT_HTTP_BASE_URL="http://127.0.0.1:6333"
+          export QDRANT_GRPC_HOST="127.0.0.1"
+          export QDRANT_GRPC_PORT="6334"
 
-            echo "[INFO] Stop existing Spring Boot application (if any)"
-            PID=\$(pgrep -f 'giftrecommender-0.0.1-SNAPSHOT.jar' || true)
-            if [ -n "\$PID" ]; then
-              kill -15 \$PID || true
-              for i in {1..60}; do
-                sleep 1
-                if ! ps -p \$PID >/dev/null; then
-                  echo "[INFO] Process \$PID terminated"
-                  break
-                fi
-                if [ "\$i" -eq 60 ]; then
-                  echo "[WARN] Force killing \$PID"
-                  kill -9 \$PID || true
-                fi
-              done
-            else
-              echo "[INFO] No existing process"
-            fi
+          nohup java -jar \
+            -Dspring.profiles.active=prod \
+            -Dspring.config.additional-location="$HOME/application-secret.yml" \
+            "$HOME/giftrecommender-0.0.1-SNAPSHOT.jar" \
+            > "$HOME/app.log" 2>&1 &
 
-            echo "[INFO] Start Spring Boot (point to local Qdrant)"
-            export QDRANT_HTTP_BASE_URL="http://127.0.0.1:6333"
-            export QDRANT_GRPC_HOST="127.0.0.1"
-            export QDRANT_GRPC_PORT="6334"
-
-            nohup java -jar \
-              -Dspring.profiles.active=prod \
-              -Dspring.config.additional-location=/home/${USER}/application-secret.yml \
-              /home/${USER}/giftrecommender-0.0.1-SNAPSHOT.jar \
-              > /home/${USER}/app.log 2>&1 &
-
-            echo "[INFO] Tail recent logs"
-            tail -n 200 /home/${USER}/app.log || true
+          echo "[INFO] Tail recent logs"
+          tail -n 200 "$HOME/app.log" || true
           EOF
       
 
