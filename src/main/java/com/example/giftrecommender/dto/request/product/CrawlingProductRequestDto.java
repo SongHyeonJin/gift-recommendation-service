@@ -13,7 +13,6 @@ public record CrawlingProductRequestDto(
         String originalName,
 
         @Schema(description = "노출 상품명", example = "마카롱 3구 USB 고용량 큐브 멀티탭 1.5m")
-        @NotBlank
         String displayName,
 
         @Schema(description = "가격 (원 단위)", example = "15900")
