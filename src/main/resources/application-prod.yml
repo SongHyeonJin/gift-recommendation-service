@@ -13,3 +13,9 @@ spring-doc:
 
 server:
   forward-headers-strategy: framework
+
+openai:
+  enabled: true
+
+vector:
+  enabled: true

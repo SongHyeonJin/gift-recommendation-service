@@ -6,10 +6,12 @@ import com.example.giftrecommender.dto.request.product.CrawlingProductRequestDto
 import com.example.giftrecommender.dto.response.CrawlingProductResponseDto;
 import com.example.giftrecommender.mapper.CrawlingProductMapper;
 import com.example.giftrecommender.util.RecommendationUtil;
+import com.example.giftrecommender.vector.event.ProductCreatedEvent;
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.ConstraintViolationException;
 import jakarta.validation.Validator;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -22,6 +24,7 @@ public class CrawlingProductSaver {
 
     private final CrawlingProductRepository crawlingProductRepository;
     private final Validator validator;
+    private final ApplicationEventPublisher publisher;
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public CrawlingProductResponseDto save(CrawlingProductRequestDto requestDto) {
@@ -34,7 +37,9 @@ public class CrawlingProductSaver {
 
         CrawlingProduct product = CrawlingProduct.builder()
                 .originalName(requestDto.originalName())
-                .displayName(RecommendationUtil.generateDisplayName(requestDto.originalName())) // 노출용 이름 생성
+                .displayName(requestDto.displayName() == null ?
+                        RecommendationUtil.generateDisplayName(requestDto.originalName())
+                        : requestDto.displayName())
                 .price(requestDto.price())
                 .imageUrl(requestDto.imageUrl())
                 .productUrl(requestDto.productUrl())
@@ -48,6 +53,19 @@ public class CrawlingProductSaver {
                 .build();
 
         CrawlingProduct savedProduct = crawlingProductRepository.save(product);
+
+        String pointId = String.valueOf(savedProduct.getId());
+        String model   = "text-embedding-3-small";
+
+        savedProduct.markEmbedding(pointId, model, false);
+
+        // 이벤트 발행 → AFTER_COMMIT에서 임베딩/업서트 수행
+        publisher.publishEvent(new ProductCreatedEvent(
+                savedProduct.getId(),
+                savedProduct.getDisplayName(),
+                savedProduct.getPrice()
+        ));
+
         return CrawlingProductMapper.toDto(savedProduct);
     }
 
