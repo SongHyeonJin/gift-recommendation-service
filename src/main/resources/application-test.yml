@@ -6,3 +6,13 @@ spring:
   jpa:
     hibernate:
       ddl-auto: create-drop
+
+  autoconfigure:
+    exclude:
+      - com.openai.springboot.OpenAIClientAutoConfiguration
+
+openai:
+  enabled: false
+
+vector:
+  enabled: false

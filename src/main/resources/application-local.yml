@@ -6,4 +6,10 @@ spring:
 
   jpa:
     hibernate:
-      ddl-auto: update
+      ddl-auto: create-drop
+
+openai:
+  enabled: true
+
+vector:
+  enabled: true

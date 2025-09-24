@@ -13,11 +13,7 @@ server:
     timeout-per-shutdown-phase: 30s
 
 qdrant:
-  http-base-url: ${QDRANT__HTTP_BASE_URL:}
-  tls: ${QDRANT__TLS:}
+  http-base-url: ${QDRANT__HTTP_BASE_URL:http://localhost:6333}
   grpc:
-    host: ${QDRANT__GRPC__HOST:}
-    port: ${QDRANT__GRPC__PORT:}
-
-openai:
-  enabled: true
+    host: ${QDRANT__GRPC__HOST:localhost}
+    port: ${QDRANT__GRPC__PORT:6334}
