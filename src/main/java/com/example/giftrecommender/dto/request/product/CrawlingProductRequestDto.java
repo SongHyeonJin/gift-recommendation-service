@@ -1,5 +1,7 @@
 package com.example.giftrecommender.dto.request.product;
 
+import com.example.giftrecommender.domain.enums.Age;
+import com.example.giftrecommender.domain.enums.Gender;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.*;
 
@@ -46,7 +48,13 @@ public record CrawlingProductRequestDto(
         String sellerName,
 
         @Schema(description = "플랫폼명", example = "텐바이텐")
-        String platform
+        String platform,
+
+        @Schema(description = "추천 타겟 성별", example = "FEMALE")
+        Gender gender,
+
+        @Schema(description = "추천 타겟 나이", example = "20")
+        Age age
 
 ) {}
 
