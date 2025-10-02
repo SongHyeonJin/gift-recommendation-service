@@ -1,6 +1,7 @@
 package com.example.giftrecommender.common.logging.interceptor;
 
 import com.example.giftrecommender.common.logging.LogEventService;
+import com.example.giftrecommender.common.logging.LoggingExcludes;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
@@ -20,30 +21,54 @@ public class ResponseLoggingInterceptor implements HandlerInterceptor {
     private static final String TRACE_ID = "traceId";
     private final LogEventService logEventService;
 
+    private boolean excluded(HttpServletRequest request) {
+        String uri = request.getRequestURI();
+        String method = request.getMethod();
+
+        if (!uri.startsWith(LoggingExcludes.API_PREFIX)) return true;
+
+        for (String p : LoggingExcludes.URL_PREFIXES) {
+            if (uri.startsWith(p)) return true;
+        }
+
+        return "OPTIONS".equalsIgnoreCase(method) || "HEAD".equalsIgnoreCase(method);
+    }
+
     @Override
     public void afterCompletion(HttpServletRequest request, HttpServletResponse response,
                                 Object handler, Exception ex) {
-        String traceId = MDC.get(TRACE_ID);
-        int status = response.getStatus();
+        try {
+            if (excluded(request)) {
+                return;
+            }
 
-        if (response instanceof ContentCachingResponseWrapper wrapper) {
-            String responseBody = new String(wrapper.getContentAsByteArray(), StandardCharsets.UTF_8);
+            String traceId = (String) request.getAttribute(TRACE_ID);
+            if (traceId == null) traceId = MDC.get(TRACE_ID);
+            if (traceId == null) traceId = "-";
 
-            // 콘솔/파일 로그
-            log.info("Response [{}] Status: {}, Body: {}", traceId, status, responseBody);
+            int status = response.getStatus();
 
-            // DB 저장용 로그
-            String logMessage = String.format("Response %s %s\nStatus: %d\nBody: %s",
-                    request.getMethod(), request.getRequestURI(), status, responseBody);
+            if (response instanceof ContentCachingResponseWrapper wrapper) {
+                byte[] bytes = wrapper.getContentAsByteArray();
+                String responseBody = (bytes != null && bytes.length > 0)
+                        ? new String(bytes, StandardCharsets.UTF_8)
+                        : "";
 
-            logEventService.log("INFO", "ResponseLoggingInterceptor", logMessage);
-        } else {
-            log.info("Response [{}] Status: {}", traceId, status);
-            logEventService.log("INFO", "ResponseLoggingInterceptor",
-                    String.format("Response %s %s\nStatus: %d",
-                            request.getMethod(), request.getRequestURI(), status));
+                log.info("Response [{}] {} {} Status: {}, Body: {}",
+                        traceId, request.getMethod(), request.getRequestURI(), status, responseBody);
+
+                String logMessage = String.format("Response %s %s\nStatus: %d\nBody: %s",
+                        request.getMethod(), request.getRequestURI(), status, responseBody);
+                logEventService.log("INFO", "ResponseLoggingInterceptor", logMessage);
+            } else {
+                log.info("Response [{}] {} {} Status: {}",
+                        traceId, request.getMethod(), request.getRequestURI(), status);
+                String logMessage = String.format("Response %s %s\nStatus: %d",
+                        request.getMethod(), request.getRequestURI(), status);
+                logEventService.log("INFO", "ResponseLoggingInterceptor", logMessage);
+            }
+        } finally {
+            MDC.clear();
         }
-
-        MDC.clear();
     }
 }
