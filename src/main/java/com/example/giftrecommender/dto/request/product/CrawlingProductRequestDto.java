@@ -53,7 +53,7 @@ public record CrawlingProductRequestDto(
         @Schema(description = "추천 타겟 성별", example = "FEMALE")
         Gender gender,
 
-        @Schema(description = "추천 타겟 나이", example = "20")
+        @Schema(description = "추천 타겟 나이", example = "YOUNG_ADULT")
         Age age
 
 ) {}

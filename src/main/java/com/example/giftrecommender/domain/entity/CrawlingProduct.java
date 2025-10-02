@@ -95,7 +95,7 @@ public class CrawlingProduct {
     // 연령대 태그
     @Enumerated(EnumType.STRING)
     @Column(length = 15)
-    private Age age = Age.ANY;
+    private Age age = Age.NONE;
 
     // 생성/수정 시각
     @Column(name = "created_at", nullable = false)
@@ -169,8 +169,8 @@ public class CrawlingProduct {
         this.score = score != null ? score : 0;
         this.sellerName = sellerName;
         this.platform = platform;
-        this.gender = gender;
-        this.age = age;
+        this.gender = (gender != null) ? gender : Gender.ANY;
+        this.age    = (age != null) ? age : Age.NONE;
     }
 }
 
