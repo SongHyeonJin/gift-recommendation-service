@@ -28,18 +28,21 @@ public class CrawlingProductSaver {
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public CrawlingProductResponseDto save(CrawlingProductRequestDto requestDto) {
+        // 유효성 검증
         Set<ConstraintViolation<CrawlingProductRequestDto>> v = validator.validate(requestDto);
         if (!v.isEmpty()) {
             throw new ConstraintViolationException(v);
         }
 
+        // 점수 계산
         int score = RecommendationUtil.calculateScore(requestDto.rating(), requestDto.reviewCount());
 
+        // 엔티티 생성
         CrawlingProduct product = CrawlingProduct.builder()
                 .originalName(requestDto.originalName())
                 .displayName(requestDto.displayName() == null ?
                         RecommendationUtil.generateDisplayName(requestDto.originalName())
-                        : requestDto.displayName())
+                        : RecommendationUtil.generateDisplayName(requestDto.displayName()))
                 .price(requestDto.price())
                 .imageUrl(requestDto.imageUrl())
                 .productUrl(requestDto.productUrl())
@@ -50,13 +53,16 @@ public class CrawlingProductSaver {
                 .score(score)
                 .sellerName(requestDto.sellerName())
                 .platform(requestDto.platform())
+                .gender(requestDto.gender())
+                .age(requestDto.age())
                 .build();
 
+        // 저장
         CrawlingProduct savedProduct = crawlingProductRepository.save(product);
 
+        // 임베딩 정보 마킹
         String pointId = String.valueOf(savedProduct.getId());
         String model   = "text-embedding-3-small";
-
         savedProduct.markEmbedding(pointId, model, false);
 
         // 이벤트 발행 → AFTER_COMMIT에서 임베딩/업서트 수행

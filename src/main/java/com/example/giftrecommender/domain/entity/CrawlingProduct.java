@@ -25,7 +25,7 @@ public class CrawlingProduct {
     private String originalName;
 
     // 사용자에게 표시할 상품명
-    @Column(name = "display_name", nullable = false, length = 255)
+    @Column(name = "display_name", length = 255)
     private String displayName;
 
     // 가격 (원 단위)
@@ -33,11 +33,11 @@ public class CrawlingProduct {
     private Integer price;
 
     // 대표 이미지 URL
-    @Column(columnDefinition = "TEXT")
+    @Column(columnDefinition = "TEXT", nullable = false)
     private String imageUrl;
 
     // 상품 상세 페이지 링크
-    @Column(name = "product_url", nullable = false, length = 512, unique = true)
+    @Column(name = "product_url", nullable = false, length = 768, unique = true)
     private String productUrl;
 
     // 카테고리명
@@ -156,7 +156,7 @@ public class CrawlingProduct {
     @Builder
     public CrawlingProduct(String originalName, String displayName, Integer price, String imageUrl,
                            String productUrl, String category, List<String> keywords, Integer reviewCount,
-                           BigDecimal rating,  Integer score, String sellerName, String platform) {
+                           BigDecimal rating,  Integer score, String sellerName, String platform, Gender gender, Age age) {
         this.originalName = originalName;
         this.displayName = displayName;
         this.price = price;
@@ -169,6 +169,8 @@ public class CrawlingProduct {
         this.score = score != null ? score : 0;
         this.sellerName = sellerName;
         this.platform = platform;
+        this.gender = (gender != null) ? gender : Gender.ANY;
+        this.age    = (age != null) ? age : Age.NONE;
     }
 }
 

@@ -22,10 +22,11 @@ public class WebConfig implements WebMvcConfigurer {
     public void addCorsMappings(CorsRegistry registry) {
         registry.addMapping("/**")
                 .allowedOrigins(
-                        "https://mumusgiftbox.o-r.kr",
+                        "https://api.moomoo-gift.com",
                         "https://moomus-gift.vercel.app",
                         "https://moomu-preview.vercel.app",
-                        "chrome-extension://kfijmigfhljdnoimcfnjlbgeadnmlhco")
+                        "chrome-extension://kfijmigfhljdnoimcfnjlbgeadnmlhco",
+                        "chrome-extension://ojijbddedeekmgnbkfldhghajliefhpo")
                 .allowedMethods("*")
                 .allowedHeaders("*")
                 .allowCredentials(true);
