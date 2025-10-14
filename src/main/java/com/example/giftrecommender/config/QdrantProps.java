@@ -8,8 +8,9 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @Getter @Setter
 public class QdrantProps {
     private String httpBaseUrl;
-    private String apiKey;
     private boolean tls;
+    private String collection;
+    private double defaultScoreThreshold = 0.75;
 
     private final Grpc grpc = new Grpc();
 
@@ -17,5 +18,11 @@ public class QdrantProps {
     public static class Grpc {
         private String host;
         private int port;
+    }
+
+    @Getter @Setter
+    public static class Search {
+        private double threshold = 0.75;
+        private int limit = 10;
     }
 }

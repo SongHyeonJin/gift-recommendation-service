@@ -3,6 +3,7 @@ package com.example.giftrecommender.domain.repository;
 import com.example.giftrecommender.domain.entity.CrawlingProduct;
 import com.example.giftrecommender.domain.enums.Age;
 import com.example.giftrecommender.domain.enums.Gender;
+import com.example.giftrecommender.vector.BackfillIdView;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -67,4 +68,23 @@ public interface CrawlingProductRepository extends JpaRepository<CrawlingProduct
 
     @Query("select p.embeddingReady from CrawlingProduct p where p.id = :id")
     Boolean isEmbeddingReady(@Param("id") Long id);
+
+    // keywords 존재 & 비어있지 않고, vectorPointId도 존재하는 것만
+    @Query("""
+      select p.id as id, p.vectorPointId as vectorPointId
+      from CrawlingProduct p
+      where p.vectorPointId is not null
+        and p.vectorPointId <> 0
+        and p.keywords is not empty
+    """)
+    List<BackfillIdView> findAllIdsForQdrantKeywordBackfill();
+
+    // 단건 키워드만 조회 (컬렉션 join)
+    @Query("""
+        select kw
+        from CrawlingProduct p
+        join p.keywords kw
+        where p.id = :id
+    """)
+    List<String> findKeywordsById(@Param("id") Long id);
 }

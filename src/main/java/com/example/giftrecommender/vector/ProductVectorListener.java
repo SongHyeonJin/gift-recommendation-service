@@ -11,6 +11,8 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 
+import java.util.List;
+
 @Slf4j
 @Component
 @RequiredArgsConstructor
@@ -30,6 +32,8 @@ public class ProductVectorListener {
             return;
         }
 
+        List<String> keywords = crawlingProductRepository.findKeywordsById(event.productId());
+
         int maxRetries = 3;
         long backoffMs = 500L;
 
@@ -39,13 +43,15 @@ public class ProductVectorListener {
                 productVectorService.upsertProduct(
                         event.productId(),
                         event.displayName(),
-                        event.price()
+                        event.price(),
+                        keywords
                 );
 
                 // DB 상태 갱신 (새 트랜잭션으로 처리)
                 statusService.markEmbeddingReady(event.productId());
 
-                log.info("[VECTOR] upsert ok id={}, attempt={}", event.productId(), attempt);
+                log.info("[VECTOR] upsert ok id={}, attempt={}, keywords.size={}",
+                        event.productId(), attempt, (keywords == null ? 0 : keywords.size()));
                 return;
 
             } catch (RateLimitException e) {

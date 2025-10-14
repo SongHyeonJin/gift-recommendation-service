@@ -78,8 +78,8 @@ public class CrawlingProduct {
     @Column(name = "is_confirmed")
     private Boolean isConfirmed = false;
 
-    @Column(name = "vector_point_id", length = 100)
-    private String vectorPointId;
+    @Column(name = "vector_point_id", unique = true)
+    private Long vectorPointId;
 
     @Column(name = "embedding_model", length = 50)
     private String embeddingModel;
@@ -144,7 +144,7 @@ public class CrawlingProduct {
     public void changeKeywords(List<String> keywords) { this.keywords = keywords; }
     public void changeSellerName(String sellerName) { this.sellerName = sellerName; }
     public void changePlatform(String platform) { this.platform = platform; }
-    public void markEmbedding(String pointId, String model, boolean ready) {
+    public void markEmbedding(Long pointId, String model, boolean ready) {
         this.vectorPointId = pointId;
         this.embeddingModel = model;
         this.embeddingReady = ready;

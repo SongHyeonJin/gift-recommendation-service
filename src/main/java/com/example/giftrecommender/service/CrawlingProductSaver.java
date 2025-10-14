@@ -61,7 +61,7 @@ public class CrawlingProductSaver {
         CrawlingProduct savedProduct = crawlingProductRepository.save(product);
 
         // 임베딩 정보 마킹
-        String pointId = String.valueOf(savedProduct.getId());
+        Long pointId = savedProduct.getId();
         String model   = "text-embedding-3-small";
         savedProduct.markEmbedding(pointId, model, false);
 
