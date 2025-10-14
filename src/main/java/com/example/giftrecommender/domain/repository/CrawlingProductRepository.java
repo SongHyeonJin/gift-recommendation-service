@@ -71,11 +71,11 @@ public interface CrawlingProductRepository extends JpaRepository<CrawlingProduct
 
     // keywords 존재 & 비어있지 않고, vectorPointId도 존재하는 것만
     @Query("""
-        select p.id as id, p.vectorPointId as vectorPointId
-        from CrawlingProduct p
-        where p.vectorPointId is not null
-          and p.vectorPointId <> ''
-          and p.keywords is not empty
+      select p.id as id, p.vectorPointId as vectorPointId
+      from CrawlingProduct p
+      where p.vectorPointId is not null
+        and p.vectorPointId <> 0
+        and p.keywords is not empty
     """)
     List<BackfillIdView> findAllIdsForQdrantKeywordBackfill();
 
