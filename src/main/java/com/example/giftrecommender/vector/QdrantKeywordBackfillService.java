@@ -3,6 +3,7 @@ package com.example.giftrecommender.vector;
 import com.example.giftrecommender.domain.repository.CrawlingProductRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
@@ -11,6 +12,7 @@ import java.util.List;
 @Slf4j
 @Service
 @RequiredArgsConstructor
+@ConditionalOnProperty(prefix = "vector", name = "enabled", havingValue = "true")
 public class QdrantKeywordBackfillService {
 
     private final CrawlingProductRepository productRepository;
