@@ -10,9 +10,10 @@ import org.springframework.web.reactive.function.client.WebClient;
 import java.util.List;
 import java.util.Map;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
-@Slf4j
+@ConditionalOnProperty(prefix = "vector", name = "enabled", havingValue = "true")
 public class QdrantAdminClient {
 
     private final WebClient qdrantWebClient;
