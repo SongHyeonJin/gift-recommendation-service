@@ -82,6 +82,17 @@ public class CrawlingProductController {
         );
     }
 
+    @Operation(summary = "크롤링 상품 상세 조회")
+    @GetMapping("/{product_id}")
+    public ResponseEntity<BasicResponseDto<CrawlingProductResponseDto>> getProduct(
+            @PathVariable(name = "product_id") Long productId
+    ) {
+        CrawlingProductResponseDto result = crawlingProductService.getProduct(productId);
+        return ResponseEntity.ok(
+                BasicResponseDto.success("크롤링 상품 상세 조회 완료.", result)
+        );
+    }
+
     @Operation(summary = "상품 단건 부분 수정 (PATCH)")
     @PatchMapping("/{product_id}")
     public ResponseEntity<BasicResponseDto<CrawlingProductResponseDto>> patchProduct(
@@ -125,7 +136,7 @@ public class CrawlingProductController {
     }
 
     @Operation(summary = "상품 연령대 단건 변경")
-    @PutMapping("/age")
+    @PutMapping("/{product_id}/age")
     public ResponseEntity<BasicResponseDto<AgeResponseDto>> updateAge(
             @Valid @RequestBody AgeRequestDto request
     ) {
@@ -143,7 +154,7 @@ public class CrawlingProductController {
     }
 
     @Operation(summary = "상품 성별 단건 변경")
-    @PutMapping("/gender")
+    @PutMapping("/{product_id}/gender")
     public ResponseEntity<BasicResponseDto<GenderResponseDto>> updateGender(
             @Valid @RequestBody GenderRequestDto request
     ) {
