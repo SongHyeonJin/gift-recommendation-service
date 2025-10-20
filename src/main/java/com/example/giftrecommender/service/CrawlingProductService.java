@@ -210,6 +210,37 @@ public class CrawlingProductService {
     }
 
     /*
+     *  상품 상세 조회
+     */
+    @Transactional(readOnly = true)
+    public CrawlingProductResponseDto getProduct(Long productId) {
+        CrawlingProduct p = crawlingProductRepository.findById(productId)
+                .orElseThrow(() -> new ErrorException(ExceptionEnum.PRODUCT_NOT_FOUND));
+
+        return new CrawlingProductResponseDto(
+                p.getId(),
+                p.getOriginalName(),
+                p.getDisplayName(),
+                p.getPrice(),
+                p.getImageUrl(),
+                p.getProductUrl(),
+                p.getCategory(),
+                p.getKeywords(),
+                p.getReviewCount(),
+                p.getRating(),
+                p.getSellerName(),
+                p.getPlatform(),
+                p.getScore(),
+                p.getAdminCheck(),
+                p.getGender(),
+                p.getAge(),
+                p.getIsConfirmed(),
+                p.getCreatedAt(),
+                p.getUpdatedAt()
+        );
+    }
+
+    /*
      * 단건 부분 수정 (보낸 값만 적용)
      */
     @Transactional
