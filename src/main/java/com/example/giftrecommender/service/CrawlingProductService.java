@@ -27,6 +27,7 @@ import com.example.giftrecommender.dto.response.gender.GenderResponseDto;
 import com.example.giftrecommender.dto.response.product.BulkItemResultDto;
 import com.example.giftrecommender.dto.response.product.BulkSummaryDto;
 import com.example.giftrecommender.dto.response.product.CrawlingProductBulkSaveResponseDto;
+import com.example.giftrecommender.dto.response.product.CrawlingProductResponseDto;
 import com.example.giftrecommender.mapper.CrawlingProductMapper;
 import jakarta.validation.ConstraintViolationException;
 import lombok.RequiredArgsConstructor;
@@ -235,6 +236,7 @@ public class CrawlingProductService {
                 p.getGender(),
                 p.getAge(),
                 p.getIsConfirmed(),
+                p.getIsAdvertised(),
                 p.getCreatedAt(),
                 p.getUpdatedAt()
         );

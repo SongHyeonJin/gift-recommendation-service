@@ -54,7 +54,10 @@ public record CrawlingProductRequestDto(
         Gender gender,
 
         @Schema(description = "추천 타겟 나이", example = "YOUNG_ADULT")
-        Age age
+        Age age,
+
+        @Schema(description = "쿠팡 광고 여부", example = "false")
+        Boolean isAdvertised
 
 ) {}
 

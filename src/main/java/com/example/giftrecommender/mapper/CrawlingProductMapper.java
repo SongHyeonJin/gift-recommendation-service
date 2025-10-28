@@ -1,7 +1,7 @@
 package com.example.giftrecommender.mapper;
 
 import com.example.giftrecommender.domain.entity.CrawlingProduct;
-import com.example.giftrecommender.dto.response.CrawlingProductResponseDto;
+import com.example.giftrecommender.dto.response.product.CrawlingProductResponseDto;
 
 public class CrawlingProductMapper {
 
@@ -24,6 +24,7 @@ public class CrawlingProductMapper {
                 product.getGender(),
                 product.getAge(),
                 product.getIsConfirmed(),
+                product.getIsAdvertised(),
                 product.getCreatedAt(),
                 product.getUpdatedAt()
         );
