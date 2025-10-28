@@ -55,6 +55,7 @@ public class CrawlingProductSaver {
                 .platform(requestDto.platform())
                 .gender(requestDto.gender())
                 .age(requestDto.age())
+                .isAdvertised(Boolean.TRUE.equals(requestDto.isAdvertised()))
                 .build();
 
         // 저장
