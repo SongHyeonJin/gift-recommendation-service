@@ -20,6 +20,7 @@ import com.example.giftrecommender.dto.response.confirm.ConfirmResponseDto;
 import com.example.giftrecommender.dto.response.gender.GenderBulkResponseDto;
 import com.example.giftrecommender.dto.response.gender.GenderResponseDto;
 import com.example.giftrecommender.dto.response.product.CrawlingProductBulkSaveResponseDto;
+import com.example.giftrecommender.dto.response.product.CrawlingProductResponseDto;
 import com.example.giftrecommender.service.CrawlingProductSaver;
 import com.example.giftrecommender.service.CrawlingProductService;
 import io.swagger.v3.oas.annotations.Operation;
