@@ -3,7 +3,7 @@ package com.example.giftrecommender.service;
 import com.example.giftrecommender.domain.entity.CrawlingProduct;
 import com.example.giftrecommender.domain.repository.CrawlingProductRepository;
 import com.example.giftrecommender.dto.request.product.CrawlingProductRequestDto;
-import com.example.giftrecommender.dto.response.CrawlingProductResponseDto;
+import com.example.giftrecommender.dto.response.product.CrawlingProductResponseDto;
 import com.example.giftrecommender.mapper.CrawlingProductMapper;
 import com.example.giftrecommender.util.RecommendationUtil;
 import com.example.giftrecommender.vector.event.ProductCreatedEvent;
@@ -55,6 +55,7 @@ public class CrawlingProductSaver {
                 .platform(requestDto.platform())
                 .gender(requestDto.gender())
                 .age(requestDto.age())
+                .isAdvertised(Boolean.TRUE.equals(requestDto.isAdvertised()))
                 .build();
 
         // 저장

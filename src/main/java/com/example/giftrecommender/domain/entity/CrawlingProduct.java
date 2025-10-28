@@ -2,11 +2,13 @@ package com.example.giftrecommender.domain.entity;
 
 import com.example.giftrecommender.domain.enums.Age;
 import com.example.giftrecommender.domain.enums.Gender;
+import com.example.giftrecommender.dto.response.product.CrawlingRecommendedProductResponseDto;
 import jakarta.persistence.*;
 import lombok.*;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.Collections;
 import java.util.List;
 
 @Entity
@@ -77,6 +79,9 @@ public class CrawlingProduct {
     // 관리자 컨펌 여부
     @Column(name = "is_confirmed")
     private Boolean isConfirmed = false;
+
+    @Column(name = "is_advertised")
+    private Boolean isAdvertised = false;
 
     @Column(name = "vector_point_id", unique = true)
     private Long vectorPointId;
@@ -155,8 +160,8 @@ public class CrawlingProduct {
 
     @Builder
     public CrawlingProduct(String originalName, String displayName, Integer price, String imageUrl,
-                           String productUrl, String category, List<String> keywords, Integer reviewCount,
-                           BigDecimal rating,  Integer score, String sellerName, String platform, Gender gender, Age age) {
+                           String productUrl, String category, List<String> keywords, Integer reviewCount, BigDecimal rating,
+                           Integer score, String sellerName, String platform, Gender gender, Age age, Boolean isAdvertised) {
         this.originalName = originalName;
         this.displayName = displayName;
         this.price = price;
@@ -171,6 +176,34 @@ public class CrawlingProduct {
         this.platform = platform;
         this.gender = (gender != null) ? gender : Gender.ANY;
         this.age    = (age != null) ? age : Age.NONE;
+        this.isAdvertised = isAdvertised;
+    }
+
+    public static CrawlingRecommendedProductResponseDto from(CrawlingProduct p) {
+        int price = p.getPrice() == null ? 0 : p.getPrice();
+        int reviewCount = p.getReviewCount() == null ? 0 : p.getReviewCount();
+        BigDecimal rating = p.getRating() == null ? new BigDecimal("0.0") : p.getRating();
+        List<String> keywords = p.getKeywords() == null ? Collections.emptyList() : p.getKeywords();
+        boolean advertised =
+                Boolean.TRUE.equals(p.getIsAdvertised());
+
+        return new CrawlingRecommendedProductResponseDto(
+                p.getId(),
+                p.getDisplayName(),
+                price,
+                p.getProductUrl(),
+                p.getImageUrl(),
+                p.getPlatform(),
+                keywords,
+                reviewCount,
+                rating,
+                p.getSellerName(),
+                advertised
+        );
+    }
+
+    public static List<CrawlingRecommendedProductResponseDto> from(List<CrawlingProduct> products) {
+        return products.stream().map(CrawlingRecommendedProductResponseDto::from).toList();
     }
 }
 

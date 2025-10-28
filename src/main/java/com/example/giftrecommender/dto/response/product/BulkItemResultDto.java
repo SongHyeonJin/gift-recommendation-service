@@ -1,7 +1,6 @@
 package com.example.giftrecommender.dto.response.product;
 
 import com.example.giftrecommender.domain.enums.BulkStatus;
-import com.example.giftrecommender.dto.response.CrawlingProductResponseDto;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 @Schema(description = "벌크 저장 시 개별 항목 처리 결과")

@@ -1,5 +1,6 @@
-package com.example.giftrecommender.dto.response;
+package com.example.giftrecommender.dto.response.product;
 
+import com.example.giftrecommender.domain.entity.CrawlingProduct;
 import com.example.giftrecommender.domain.enums.Age;
 import com.example.giftrecommender.domain.enums.Gender;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -61,10 +62,38 @@ public record CrawlingProductResponseDto(
         @Schema(description = "관리자 컨펌 여부", example = "false")
         Boolean isConfirmed,
 
+        @Schema(description = "쿠팡 광고 여부", example = "false")
+        Boolean isAdvertised,
+
         @Schema(description = "생성 시각", example = "2025-08-07T12:00:00")
         LocalDateTime createdAt,
 
         @Schema(description = "수정 시각", example = "2025-08-07T12:10:00")
         LocalDateTime updatedAt
 
-) {}
+) {
+        public static CrawlingProductResponseDto from(CrawlingProduct product) {
+                return new CrawlingProductResponseDto(
+                        product.getId(),
+                        product.getOriginalName(),
+                        product.getDisplayName(),
+                        product.getPrice(),
+                        product.getImageUrl(),
+                        product.getProductUrl(),
+                        product.getCategory(),
+                        product.getKeywords(),
+                        product.getReviewCount(),
+                        product.getRating(),
+                        product.getSellerName(),
+                        product.getPlatform(),
+                        product.getScore(),
+                        product.getAdminCheck(),
+                        product.getGender(),
+                        product.getAge(),
+                        product.getIsConfirmed(),
+                        product.getIsAdvertised(),
+                        product.getCreatedAt(),
+                        product.getUpdatedAt()
+                );
+        }
+}
