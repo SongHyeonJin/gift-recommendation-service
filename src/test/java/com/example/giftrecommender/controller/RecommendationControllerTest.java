@@ -1,6 +1,7 @@
 package com.example.giftrecommender.controller;
 
 import com.example.giftrecommender.common.logging.LogEventService;
+import com.example.giftrecommender.domain.enums.Gender;
 import com.example.giftrecommender.dto.request.RecommendationRequestDto;
 import com.example.giftrecommender.dto.response.RecommendationResponseDto;
 import com.example.giftrecommender.dto.response.RecommendedProductResponseDto;
@@ -52,7 +53,7 @@ class RecommendationControllerTest {
     void recommendSuccess() throws Exception {
         // given
         RecommendationRequestDto request = new RecommendationRequestDto(
-                "여자친구", "20대", 50000, 100000,
+                "여자친구", "20대", Gender.FEMALE, 50000, 100000,
                 "기념일", "악세서리", List.of("악세서리", "반지", "금")
         );
 

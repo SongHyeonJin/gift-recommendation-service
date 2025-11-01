@@ -65,6 +65,8 @@ dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter-webflux'
 
 	implementation 'com.github.ben-manes.caffeine:caffeine:3.1.8'
+
+	implementation 'org.jsoup:jsoup:1.17.2'
 }
 
 tasks.named('test') {

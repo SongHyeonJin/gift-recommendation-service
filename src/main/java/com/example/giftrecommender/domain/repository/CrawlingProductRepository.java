@@ -69,7 +69,7 @@ public interface CrawlingProductRepository extends JpaRepository<CrawlingProduct
     @Query("select p.embeddingReady from CrawlingProduct p where p.id = :id")
     Boolean isEmbeddingReady(@Param("id") Long id);
 
-    // keywords 존재 & 비어있지 않고, vectorPointId도 존재하는 것만
+    // keywords 존재 & 비어있지 않고 vectorPointId도 존재하는 것만
     @Query("""
       select p.id as id, p.vectorPointId as vectorPointId
       from CrawlingProduct p
@@ -79,7 +79,7 @@ public interface CrawlingProductRepository extends JpaRepository<CrawlingProduct
     """)
     List<BackfillIdView> findAllIdsForQdrantKeywordBackfill();
 
-    // 단건 키워드만 조회 (컬렉션 join)
+    // 단건 키워드만 조회
     @Query("""
         select kw
         from CrawlingProduct p
@@ -87,4 +87,14 @@ public interface CrawlingProductRepository extends JpaRepository<CrawlingProduct
         where p.id = :id
     """)
     List<String> findKeywordsById(@Param("id") Long id);
+
+    List<CrawlingProduct> findTop500ByPriceBetweenOrderByIdDesc(int minPrice, int maxPrice);
+
+    List<CrawlingProduct> findTop200ByOrderByIdDesc();
+
+    List<CrawlingProduct> findTop20ByDisplayNameContainingIgnoreCaseAndPriceBetweenOrderByIdDesc(
+            String displayName,
+            int minPrice,
+            int maxPrice
+    );
 }

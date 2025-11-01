@@ -5,6 +5,7 @@ import com.example.giftrecommender.common.exception.ExceptionEnum;
 import com.example.giftrecommender.common.quota.RedisQuotaManager;
 import com.example.giftrecommender.domain.entity.*;
 import com.example.giftrecommender.domain.entity.keyword.KeywordGroup;
+import com.example.giftrecommender.domain.enums.Gender;
 import com.example.giftrecommender.domain.enums.SessionStatus;
 import com.example.giftrecommender.domain.repository.*;
 import com.example.giftrecommender.domain.repository.keyword.KeywordGroupRepository;
@@ -206,7 +207,7 @@ class RecommendationServiceTest {
     }
 
     private RecommendationRequestDto createRequest() {
-        return new RecommendationRequestDto("남자친구", "20대",50000, 100000,
+        return new RecommendationRequestDto("남자친구", "20대", Gender.MALE,50000, 100000,
                 "생일", "운동", List.of("러닝화", "러닝가방", "스마트워치", "러닝밴드"));
     }
 
