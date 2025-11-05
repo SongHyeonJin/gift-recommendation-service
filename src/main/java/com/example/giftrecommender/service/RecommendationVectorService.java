@@ -17,49 +17,45 @@ import com.example.giftrecommender.vector.VectorProductSearch;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.*;
 import java.util.stream.Collectors;
 
-/**
- * 벡터 기반 선물 추천 서비스
- * - 키워드당 먼저 2개씩 채우고
- * - 많이 나온 키워드에서 못 채운 키워드로 1개씩 빌려주고
- * - 그래도 부족하면 남는 걸로 8개 채운다.
- */
 @Slf4j
 @Service
 @RequiredArgsConstructor
 @ConditionalOnProperty(prefix = "vector", name = "enabled", havingValue = "true")
 public class RecommendationVectorService {
-    /** 최종으로 내려줄 개수 */
+    /** 최종으로 내려줄 개수(응답 상한) */
     private static final int TARGET_RESULT_SIZE = 8;
 
-    /** 키워드당 기본으로 보장하고 싶은 개수 */
+    /** 키워드당 우선 보장수(1차 목표) */
     private static final int PER_KEYWORD_PRIMARY = 2;
 
-    /** 키워드당 임시로 쌓아둘 수 있는 최대 개수 (여기서 남는 걸 다른 키워드에 빌려줌) */
+    /** 키워드 버퍼(여분까지 쌓아뒀다가 부족 버킷에 양도) */
     private static final int PER_KEYWORD_BUFFER = 4;
 
-    /** DB/벡터/풀에서 긁어올 때 한번에 모아둘 최대 후보 수 */
+    /** 후보 풀 상한(과도한 메모리/정렬 방지) */
     private static final int CANDIDATE_POOL_LIMIT = 1200;
 
-    /** 벡터 유사도 임계값 */
+    /** 벡터 유사도 임계값(Qdrant 등 검색 필터) */
     private static final double VECTOR_THRESHOLD_DEFAULT = 0.78;
 
-    /** 벡터 topK 배수 */
+    /** 벡터 검색 topK 배수(리콜 확보용) */
     private static final int VECTOR_TOPK_MULTIPLIER = 4;
 
-    /** 제목 중복을 판단할 때의 자카드 컷오프 */
+    /** 제목 유사 중복 제거 컷오프(자카드) */
     private static final double TITLE_SIMILARITY_CUTOFF = 0.85;
 
-    /** 판매자당 최대 개수 (동일 스토어에서만 쭉 안 나오게) */
-    private static final int MAX_PER_SELLER = 2;
-
-    /** 한 번에 받을 수 있는 키워드 수 제한 */
+    /** 사용자 입력 키워드 수 제한(안전장치) */
     private static final int MAX_KEYWORDS = 10;
+
+    /** 토큰 단위 코사인 근사 매칭 임계값(라이트한 보조 판정) */
+    private static final double COSINE_SIM_THRESHOLD = 0.35;
 
     private final GuestRepository guestRepository;
     private final RecommendationSessionRepository sessionRepository;
@@ -67,18 +63,23 @@ public class RecommendationVectorService {
     private final CrawlingProductRepository crawlingProductRepository;
     private final CrawlingProductImportService crawlingProductImportService;
 
+    /** 후보 + 내부 점수 전달용 경량 DTO */
     private record Scored(CrawlingProduct p, double s) {}
 
+    /**
+     * 벡터+DB+외부를 결합한 추천 진입점
+     * - 키워드별 2개 우선 확보 → 재분배 → 부족 시 전역 보충 → DTO 변환
+     */
     @Transactional
-    public CrawlingProductRecommendationResponseDto recommendByVector(UUID guestId,
-                                                                      UUID sessionId,
-                                                                      RecommendationRequestDto request) {
+    public CrawlingProductRecommendationResponseDto recommendByVector(
+            UUID guestId, UUID sessionId, RecommendationRequestDto request) {
 
+        // 세션/게스트 검증
         Guest guest = existsGuest(guestId);
         RecommendationSession session = existsRecommendationSession(sessionId);
         verifySessionOwner(session, guest);
 
-        // 1. 키워드 정리 (중복 제거 + 최대 10개)
+        // 키워드 정규화(중복 제거 + 최대 10개)
         List<String> keywords = normalizeKeywords(request.keywords());
         if (keywords.isEmpty()) {
             return new CrawlingProductRecommendationResponseDto(List.of());
@@ -88,45 +89,34 @@ public class RecommendationVectorService {
         int maxPrice = request.maxPrice();
         Gender reqGender = request.gender();
 
-        int expectedCount = Math.min(TARGET_RESULT_SIZE, keywords.size() * PER_KEYWORD_PRIMARY);
+        // 유아/아기 도메인 가드(요청 컨텍스트 기반 허용/차단)
+        boolean babyContext = isBabyContext(request);
 
-        // 2. 후보 수집
+        // 기대 개수(키워드 수가 적을 때는 그에 맞춰 축소)
+        int expectedCount = Math.min(
+                TARGET_RESULT_SIZE,
+                Math.max(PER_KEYWORD_PRIMARY, keywords.size() * PER_KEYWORD_PRIMARY)
+        );
+
+        // 1. 키워드별 후보 수집(DB → 벡터(DB존재만) → 외부)
         List<CrawlingProduct> candidates = collectCandidates(
-                keywords,
-                minPrice,
-                maxPrice,
-                expectedCount,
-                request
+                keywords, minPrice, maxPrice, expectedCount, request, babyContext
         );
 
-        // 3. 최종 분배 (여기가 핵심)
+        // 2. 재분배(키워드별 2개 보장) + 성별/가격/도메인 가드 반영
         List<CrawlingProduct> balanced = applyFinalFiltersWithRebalance(
-                candidates,
-                minPrice,
-                maxPrice,
-                keywords,
-                reqGender,
-                expectedCount,
-                PER_KEYWORD_PRIMARY,
-                PER_KEYWORD_BUFFER
+                candidates, minPrice, maxPrice, keywords, reqGender,
+                expectedCount, PER_KEYWORD_PRIMARY, PER_KEYWORD_BUFFER, babyContext
         );
 
-        // 4. 그래도 부족하면 느슨하게 fetch해서 다시 분배
-        if (balanced.size() < expectedCount) {
-            balanced = topUpIfNeeded(
-                    balanced,
-                    keywords,
-                    minPrice,
-                    maxPrice,
-                    reqGender,
-                    expectedCount,
-                    request
-            );
+        // 3. 8개 미만이면 전역 보충(DB 근사→외부)
+        if (balanced.size() < TARGET_RESULT_SIZE) {
+            balanced = globalTopUp(balanced, keywords, minPrice, maxPrice, reqGender, request, babyContext);
         }
 
-        // 5. DTO 변환
+        // 4. DTO 변환(상한 8개)
         List<CrawlingProductResponseDto> items = balanced.stream()
-                .limit(expectedCount)
+                .limit(TARGET_RESULT_SIZE)
                 .map(CrawlingProductResponseDto::from)
                 .toList();
 
@@ -134,101 +124,81 @@ public class RecommendationVectorService {
     }
 
     /**
-     * 후보 수집: DB → 벡터 → 외부 → 전체 풀
+     * 후보 수집
+     * - 각 키워드별로 우선 2개 확보: DB → 벡터(DB 존재만) → 외부(네이버)
+     * - 그래도 부족하면 전역 풀에서 보충(후단 재분배에서 키워드 균형)
      */
     @Transactional(readOnly = true)
-    protected List<CrawlingProduct> collectCandidates(List<String> keywords,
-                                                      int minPrice,
-                                                      int maxPrice,
-                                                      int targetSize,
-                                                      RecommendationRequestDto request) {
+    protected List<CrawlingProduct> collectCandidates(
+            List<String> keywords, int minPrice, int maxPrice,
+            int targetSize, RecommendationRequestDto request, boolean babyContext) {
 
         int cap = Math.max(1, targetSize);
-        String preference = Optional.ofNullable(request.preference()).orElse("");
-        String age = Optional.ofNullable(request.age()).orElse("");
-        String reason = Optional.ofNullable(request.reason()).orElse("");
-
         List<CrawlingProduct> acc = new ArrayList<>(cap * 3);
-        Set<String> seenKeys = new HashSet<>();
-        Map<String, Integer> sellerCount = new HashMap<>();
-        Set<Long> pickedIds = new HashSet<>();
+        Set<String> seenKeys = new HashSet<>(); // 제목+이미지 키로 중복 억제
+        Set<Long> pickedIds = new HashSet<>();  // DB PK 중복 억제
 
-        Map<String, List<CrawlingProduct>> localDbCache = new HashMap<>();
+        Pageable top20 = PageRequest.of(0, 20);
 
         for (String kw : keywords) {
             if (kw == null || kw.isBlank()) continue;
             if (acc.size() >= cap * 3) break;
 
-            // 1. DB
-            List<CrawlingProduct> dbCandidates = localDbCache.computeIfAbsent(
+            int needForKw = PER_KEYWORD_PRIMARY;
+
+            // 1. DB: 이름/카테고리 LIKE + 가격 범위
+            List<CrawlingProduct> dbStrict = loadFromDbByNameOrCategory(kw, minPrice, maxPrice, top20);
+
+            dbStrict.removeIf(p -> isBabyDomain(p) && !babyContext);
+
+            List<CrawlingProduct> dbStrictMutable = new ArrayList<>(dbStrict);
+            dbStrictMutable.sort(Comparator
+                    .comparing((CrawlingProduct p) -> Optional.ofNullable(p.getScore()).orElse(0))
+                    .reversed()
+            );
+
+            int addedStrict = fillWithRulesLimitedForKeyword(
+                    acc, cap * 3, needForKw,
+                    dbStrictMutable.stream()
+                            .map(p -> new Scored(p, Optional.ofNullable(p.getScore()).orElse(0)))
+                            .toList(),
                     kw,
-                    k -> loadFromDbByKeywordStrict(k, minPrice, maxPrice)
+                    TITLE_SIMILARITY_CUTOFF, seenKeys, pickedIds
             );
+            needForKw -= addedStrict;
 
-            List<Scored> scoredDb = dbCandidates.stream()
-                    .filter(p -> matchesAnyUserKeyword(p, keywords))
-                    .map(p -> new Scored(p, 10.0))
-                    .toList();
+            // 2. 벡터: DB에 존재하는 상품만 후보화(리콜 확대)
+            if (needForKw > 0) {
+                List<Scored> scoredSim = vectorSimilarFromDB(
+                        kw, minPrice, maxPrice, needForKw, pickedIds, request, keywords
+                ).stream()
+                        .filter(sc -> !(isBabyDomain(sc.p()) && !babyContext))
+                        .toList();
 
-            fillWithRulesLimited(
-                    acc, cap * 3, PER_KEYWORD_PRIMARY, scoredDb,
-                    TITLE_SIMILARITY_CUTOFF, MAX_PER_SELLER, seenKeys, sellerCount, pickedIds,
-                    preference, age, reason, keywords
-            );
-
-            // 2. 벡터
-            if (acc.size() < cap * 3) {
-                List<CrawlingProduct> vec = vectorCandidatesForKeywordPreferTitle(
+                int addedSim = fillWithRulesLimitedForKeyword(
+                        acc, cap * 3, needForKw, scoredSim,
                         kw,
-                        PER_KEYWORD_PRIMARY,
-                        minPrice,
-                        maxPrice,
-                        pickedIds,
-                        preference,
-                        request,
-                        keywords
+                        TITLE_SIMILARITY_CUTOFF, seenKeys, pickedIds
                 );
-
-                if (!vec.isEmpty()) {
-                    List<Scored> scoredVec = vec.stream()
-                            .map(p -> {
-                                String title = Optional.ofNullable(p.getDisplayName()).orElse(p.getOriginalName());
-                                boolean hardMatch = title != null && title.toLowerCase(Locale.ROOT)
-                                        .contains(kw.toLowerCase(Locale.ROOT));
-                                return new Scored(p, hardMatch ? 8.0 : 4.0);
-                            })
-                            .toList();
-
-                    fillWithRulesLimited(
-                            acc, cap * 3, PER_KEYWORD_PRIMARY, scoredVec,
-                            TITLE_SIMILARITY_CUTOFF, MAX_PER_SELLER, seenKeys, sellerCount, pickedIds,
-                            preference, age, reason, keywords
-                    );
-                }
+                needForKw -= addedSim;
             }
 
-            // 3. 외부 (네이버)
-            if (acc.size() < cap * 3) {
-                List<CrawlingProduct> fetched = loadFromNaverByKeyword(
-                        kw, PER_KEYWORD_PRIMARY, minPrice, maxPrice, request
-                );
-
+            // 3. 외부(네이버) 페치
+            if (needForKw > 0) {
+                List<CrawlingProduct> fetched = loadFromNaverByKeyword(kw, needForKw, minPrice, maxPrice, request);
                 if (!fetched.isEmpty()) {
-                    List<Scored> scoredFetched = fetched.stream()
-                            .filter(p -> matchesAnyUserKeyword(p, keywords))
-                            .map(p -> new Scored(p, 1.0))
-                            .toList();
-
-                    fillWithRulesLimited(
-                            acc, cap * 3, PER_KEYWORD_PRIMARY, scoredFetched,
-                            TITLE_SIMILARITY_CUTOFF, MAX_PER_SELLER, seenKeys, sellerCount, pickedIds,
-                            preference, age, reason, keywords
+                    fetched.removeIf(p -> isBabyDomain(p) && !babyContext);
+                    List<Scored> scoredFetched = fetched.stream().map(p -> new Scored(p, 1.0)).toList();
+                    fillWithRulesLimitedForKeyword(
+                            acc, cap * 3, needForKw, scoredFetched,
+                            kw,
+                            TITLE_SIMILARITY_CUTOFF, seenKeys, pickedIds
                     );
                 }
             }
         }
 
-        // 4. 그래도 모자라면 전체 풀
+        // 4. 전역 풀 보충(후단 재분배에서 키워드 균형 처리)
         if (acc.size() < cap) {
             List<CrawlingProduct> pool;
             try {
@@ -238,54 +208,43 @@ public class RecommendationVectorService {
             } catch (Exception e) {
                 pool = crawlingProductRepository.findAll();
             }
+            if (pool.size() > CANDIDATE_POOL_LIMIT) pool = pool.subList(0, CANDIDATE_POOL_LIMIT);
+            pool.removeIf(p -> isBabyDomain(p) && !babyContext);
 
-            if (pool.size() > CANDIDATE_POOL_LIMIT) {
-                pool = pool.subList(0, CANDIDATE_POOL_LIMIT);
-            }
+            List<Scored> scoredAll = pool.stream()
+                    .filter(p -> withinPrice(p, minPrice, maxPrice))
+                    .map(p -> new Scored(p, 0.0))
+                    .toList();
 
-            List<Scored> scoredAll = new ArrayList<>();
-            for (CrawlingProduct p : pool) {
-                if (!withinPrice(p, minPrice, maxPrice)) continue;
-                if (!matchesAnyUserKeyword(p, keywords)) continue;
-                double score = domainAlignmentBoost(p, preference);
-                scoredAll.add(new Scored(p, score));
-            }
-            scoredAll.sort(Comparator.comparingDouble(Scored::s).reversed());
-
-            fillWithRules(
-                    acc, cap * 3, scoredAll,
-                    TITLE_SIMILARITY_CUTOFF, MAX_PER_SELLER,
-                    seenKeys, sellerCount, pickedIds,
-                    preference, age, reason, keywords
-            );
+            fillWithRulesAnyKeyword(acc, cap * 3, scoredAll, TITLE_SIMILARITY_CUTOFF, seenKeys, pickedIds, keywords);
         }
 
         return acc;
     }
 
     /**
-     * 핵심: 키워드별 2개 → 남는 키워드에서 부족한 키워드로 재분배 → 그래도 모자라면 남는 걸로 채움
+     * 최종 재분배
+     * - 버킷별 2개 보장 → donor(여분) → overflow 순으로 보충
+     * - 성별/가격/도메인 가드 적용
      */
-    private List<CrawlingProduct> applyFinalFiltersWithRebalance(List<CrawlingProduct> candidates,
-                                                                 int minPrice,
-                                                                 int maxPrice,
-                                                                 List<String> userKeywords,
-                                                                 Gender gender,
-                                                                 int limit,
-                                                                 int perKeywordPrimary,
-                                                                 int perKeywordBuffer) {
+    private List<CrawlingProduct> applyFinalFiltersWithRebalance(
+            List<CrawlingProduct> candidates,
+            int minPrice, int maxPrice,
+            List<String> userKeywords,
+            Gender gender, int limit,
+            int perKeywordPrimary, int perKeywordBuffer,
+            boolean babyContext) {
 
         Map<String, List<CrawlingProduct>> perKeyword = new LinkedHashMap<>();
-        for (String kw : userKeywords) {
-            perKeyword.put(kw, new ArrayList<>());
-        }
+        for (String kw : userKeywords) perKeyword.put(kw, new ArrayList<>());
 
         List<CrawlingProduct> overflow = new ArrayList<>();
 
+        // 후보를 키워드 버킷에 적재(버퍼 초과분은 overflow)
         for (CrawlingProduct p : candidates) {
             if (!withinPrice(p, minPrice, maxPrice)) continue;
-
             if (RecommendationUtil.blockedByGender(gender, p)) continue;
+            if (isBabyDomain(p) && !babyContext) continue;
 
             List<String> matched = findMatchedKeywords(p, userKeywords);
             if (matched.isEmpty()) continue;
@@ -294,79 +253,81 @@ public class RecommendationVectorService {
             for (String kw : matched) {
                 List<CrawlingProduct> bucket = perKeyword.get(kw);
                 if (bucket == null) continue;
-                if (bucket.size() < perKeywordBuffer) {
+                if (bucket.size() < perKeywordBuffer && !alreadyContainsBucket(bucket, p)) {
                     bucket.add(p);
                     stored = true;
                     break;
                 }
             }
-            if (!stored) {
-                overflow.add(p);
-            }
+            if (!stored) overflow.add(p);
         }
-        // 2) 여분이 있는 키워드의 3,4번째 아이템을 donor로 모은다
+
+        // donor: 각 버킷의 2개 초과분
         List<CrawlingProduct> donors = new ArrayList<>();
-        for (Map.Entry<String, List<CrawlingProduct>> e : perKeyword.entrySet()) {
-            List<CrawlingProduct> bucket = e.getValue();
+        for (List<CrawlingProduct> bucket : perKeyword.values()) {
             if (bucket.size() > perKeywordPrimary) {
-                donors.addAll(bucket.subList(perKeywordPrimary, bucket.size()));
+                donors.addAll(new ArrayList<>(bucket.subList(perKeywordPrimary, bucket.size())));
             }
         }
 
-        // 3) 2개가 안 된 키워드에 donor를 우선적으로 준다
-        // 여기서는 "매칭되는 donor만"이 아니라 "그냥 많이 나온 키워드에서 빌려온다"로 바꾼다.
-        for (Map.Entry<String, List<CrawlingProduct>> e : perKeyword.entrySet()) {
-            List<CrawlingProduct> bucket = e.getValue();
+        // 부족 버킷에 donor 우선 지급
+        for (List<CrawlingProduct> bucket : perKeyword.values()) {
             if (bucket.size() >= perKeywordPrimary) continue;
-
-            Iterator<CrawlingProduct> donorIt = donors.iterator();
-            while (bucket.size() < perKeywordPrimary && donorIt.hasNext()) {
-                CrawlingProduct d = donorIt.next();
-                if (alreadyContainsBucket(bucket, d)) {
-                    donorIt.remove();
-                    continue;
-                }
+            Iterator<CrawlingProduct> it = donors.iterator();
+            while (bucket.size() < perKeywordPrimary && it.hasNext()) {
+                CrawlingProduct d = it.next();
+                if (alreadyContainsBucket(bucket, d)) { it.remove(); continue; }
                 bucket.add(d);
-                donorIt.remove();
+                it.remove();
             }
         }
 
-        // 4) 그래도 2개가 안 된 키워드는 overflow에서 채운다 (여기서부터는 유사 카테고리가 아닐 수도 있음)
-        for (Map.Entry<String, List<CrawlingProduct>> e : perKeyword.entrySet()) {
-            List<CrawlingProduct> bucket = e.getValue();
+        // 그래도 부족하면 overflow에서 보충
+        for (List<CrawlingProduct> bucket : perKeyword.values()) {
             if (bucket.size() >= perKeywordPrimary) continue;
-
-            Iterator<CrawlingProduct> ovIt = overflow.iterator();
-            while (bucket.size() < perKeywordPrimary && ovIt.hasNext()) {
-                CrawlingProduct o = ovIt.next();
-                if (alreadyContainsBucket(bucket, o)) {
-                    ovIt.remove();
-                    continue;
-                }
+            Iterator<CrawlingProduct> it = overflow.iterator();
+            while (bucket.size() < perKeywordPrimary && it.hasNext()) {
+                CrawlingProduct o = it.next();
+                if (alreadyContainsBucket(bucket, o)) { it.remove(); continue; }
                 bucket.add(o);
-                ovIt.remove();
+                it.remove();
             }
         }
 
-        // 5) 최종 결과 만들기
+        // 최종 결과 조립(키워드 순서 유지)
         List<CrawlingProduct> finalResult = new ArrayList<>(limit);
 
-        // 1. 키워드 순서대로 "최대 perKeywordPrimary(=2)개씩"만 넣는다
+        // 1) 각 키워드 2개씩 먼저
         for (String kw : userKeywords) {
             List<CrawlingProduct> bucket = perKeyword.get(kw);
-            if (bucket == null || bucket.isEmpty()) continue;
-
-            int take = Math.min(perKeywordPrimary, bucket.size());
-            for (int i = 0; i < take; i++) {
-                CrawlingProduct p = bucket.get(i);
-                if (finalResult.size() >= limit) break;
-                if (alreadyContains(finalResult, p)) continue;
-                finalResult.add(p);
+            if (bucket == null) continue;
+            if (bucket.size() >= 2) {
+                int take = Math.min(perKeywordPrimary, bucket.size());
+                for (int i = 0; i < take && finalResult.size() < limit; i++) {
+                    CrawlingProduct p = bucket.get(i);
+                    if (alreadyContains(finalResult, p)) continue;
+                    finalResult.add(p);
+                }
             }
             if (finalResult.size() >= limit) break;
         }
 
-        // 2. 그래도 모자라면 donor 남은 것들로 채운다
+        // 2) 1개짜리 키워드 채우기
+        if (finalResult.size() < limit) {
+            for (String kw : userKeywords) {
+                List<CrawlingProduct> bucket = perKeyword.get(kw);
+                if (bucket == null) continue;
+                if (bucket.size() == 1) {
+                    CrawlingProduct p = bucket.get(0);
+                    if (!alreadyContains(finalResult, p)) {
+                        finalResult.add(p);
+                        if (finalResult.size() >= limit) break;
+                    }
+                }
+            }
+        }
+
+        // 3) donor → overflow 순으로 보충
         if (finalResult.size() < limit) {
             for (CrawlingProduct d : donors) {
                 if (finalResult.size() >= limit) break;
@@ -374,8 +335,6 @@ public class RecommendationVectorService {
                 finalResult.add(d);
             }
         }
-
-        // 3. 그래도 모자라면 overflow로 채운다
         if (finalResult.size() < limit) {
             for (CrawlingProduct o : overflow) {
                 if (finalResult.size() >= limit) break;
@@ -384,134 +343,184 @@ public class RecommendationVectorService {
             }
         }
 
-        return finalResult.size() > limit ? finalResult.subList(0, limit) : finalResult;
-    }
-
-    private boolean alreadyContains(List<CrawlingProduct> list, CrawlingProduct p) {
-        for (CrawlingProduct existing : list) {
-            if (sameProduct(existing, p)) return true;
-        }
-        return false;
-    }
-
-    private boolean alreadyContainsBucket(List<CrawlingProduct> bucket, CrawlingProduct p) {
-        for (CrawlingProduct existing : bucket) {
-            if (sameProduct(existing, p)) return true;
-        }
-        return false;
-    }
-
-    private boolean sameProduct(CrawlingProduct a, CrawlingProduct b) {
-        if (a == null || b == null) return false;
-        if (a.getId() != null && b.getId() != null) {
-            return a.getId().equals(b.getId());
-        }
-        return Objects.equals(a.getProductUrl(), b.getProductUrl());
+        return finalResult.size() > limit ? new ArrayList<>(finalResult.subList(0, limit)) : finalResult;
     }
 
     /**
-     * 느슨하게 더 가져와서 다시 같은 로직으로 분배
+     * 전역 보충 단계
+     * - DB 풀에서 키워드 코사인 근사 매칭 → 외부 페치
      */
-    private List<CrawlingProduct> topUpIfNeeded(List<CrawlingProduct> current,
-                                                List<String> keywords,
-                                                int minPrice,
-                                                int maxPrice,
-                                                Gender gender,
-                                                int targetSize,
-                                                RecommendationRequestDto request) {
+    private List<CrawlingProduct> globalTopUp(
+            List<CrawlingProduct> current,
+            List<String> keywords,
+            int minPrice, int maxPrice,
+            Gender gender,
+            RecommendationRequestDto request,
+            boolean babyContext) {
 
-        if (current.size() >= targetSize) {
-            return current;
+        List<CrawlingProduct> acc = new ArrayList<>(current);
+
+        // 중복 억제용 키/ID 세트 구성
+        Set<Long> haveIds = acc.stream()
+                .map(CrawlingProduct::getId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+
+        Set<String> seenKey = new HashSet<>();
+        for (CrawlingProduct p : acc) {
+            String title = Optional.ofNullable(p.getDisplayName()).orElse(p.getOriginalName());
+            String baseTitle = RecommendationUtil.extractBaseTitle(title);
+            String key = baseTitle + "::" + Optional.ofNullable(p.getImageUrl()).orElse("");
+            seenKey.add(key);
         }
 
-        int remain = targetSize - current.size();
-        List<CrawlingProduct> extra = new ArrayList<>();
-
-        int looseMin = Math.max(0, minPrice - (int) (minPrice * 0.15));
-        int looseMax = (maxPrice > 0) ? (int) (maxPrice * 1.15) : 0;
-
-        for (String kw : keywords) {
-            if (extra.size() >= remain * 2) break;
+        // DB 풀에서 근사 매칭
+        if (acc.size() < TARGET_RESULT_SIZE) {
+            List<CrawlingProduct> pool;
             try {
-                List<CrawlingProduct> fetched = crawlingProductImportService.fetchForKeyword(
-                        kw,
-                        looseMin,
-                        looseMax,
-                        Optional.ofNullable(request.age()).orElse(""),
-                        Optional.ofNullable(request.reason()).orElse(""),
-                        Optional.ofNullable(request.preference()).orElse(""),
-                        Math.max(2, remain)
-                );
-                extra.addAll(fetched);
-            } catch (Exception e) {
-                log.warn("loose fetch fail kw={}", kw, e);
-            }
-        }
-
-        if (extra.isEmpty()) {
-            return current;
-        }
-
-        current.addAll(extra);
-        return applyFinalFiltersWithRebalance(
-                current,
-                minPrice,
-                maxPrice,
-                keywords,
-                gender,
-                targetSize,
-                PER_KEYWORD_PRIMARY,
-                PER_KEYWORD_BUFFER
-        );
-    }
-
-    private List<String> findMatchedKeywords(CrawlingProduct p, List<String> userKws) {
-        List<String> matched = new ArrayList<>();
-        if (p == null || userKws == null || userKws.isEmpty()) return matched;
-
-        String title = Optional.ofNullable(p.getDisplayName()).orElse(p.getOriginalName());
-        String titleLower = Optional.ofNullable(title).orElse("").toLowerCase(Locale.ROOT);
-        List<String> tags = Optional.ofNullable(p.getKeywords()).orElse(List.of());
-
-        for (String kw : userKws) {
-            if (kw == null || kw.isBlank()) continue;
-            String k = kw.toLowerCase(Locale.ROOT);
-            boolean inTitle = titleLower.contains(k);
-            boolean inTags = tags.stream()
-                    .anyMatch(t -> t != null && t.toLowerCase(Locale.ROOT).contains(k));
-            if (inTitle || inTags) {
-                matched.add(kw);
-            }
-        }
-        return matched;
-    }
-
-    private List<CrawlingProduct> loadFromDbByKeywordStrict(String keyword,
-                                                            int minPrice,
-                                                            int maxPrice) {
-        String kw = keyword.trim();
-        List<CrawlingProduct> titleMatched = crawlingProductRepository
-                .findTop20ByDisplayNameContainingIgnoreCaseAndPriceBetweenOrderByIdDesc(
-                        kw,
+                pool = crawlingProductRepository.findTop500ByPriceBetweenOrderByIdDesc(
                         Math.max(minPrice, 0),
                         maxOrMaxInt(maxPrice)
                 );
-        return titleMatched.stream()
-                .limit(10)
+            } catch (Exception e) {
+                pool = crawlingProductRepository.findAll();
+            }
+
+            List<Scored> sims = new ArrayList<>();
+            for (CrawlingProduct p : pool) {
+                if (!withinPrice(p, minPrice, maxPrice)) continue;
+                if (isBabyDomain(p) && !babyContext) continue;
+                double maxCos = 0.0;
+                for (String kw : keywords) {
+                    maxCos = Math.max(maxCos, cosineKeywordSimilarity(kw, p));
+                }
+                if (maxCos >= COSINE_SIM_THRESHOLD) sims.add(new Scored(p, maxCos));
+            }
+            sims.sort(Comparator.comparingDouble(Scored::s).reversed());
+
+            addUntil(acc, sims, TARGET_RESULT_SIZE, seenKey, haveIds, gender);
+        }
+
+        // 외부 보충(키워드별 소량 페치)
+        if (acc.size() < TARGET_RESULT_SIZE) {
+            int remain = TARGET_RESULT_SIZE - acc.size();
+            for (String kw : keywords) {
+                if (remain <= 0) break;
+                List<CrawlingProduct> fetched = loadFromNaverByKeyword(
+                        kw, Math.max(2, remain), minPrice, maxPrice, request
+                );
+                if (!fetched.isEmpty()) {
+                    fetched.removeIf(p -> isBabyDomain(p) && !babyContext);
+                    List<Scored> scored = fetched.stream().map(p -> new Scored(p, 1.0)).toList();
+                    addUntil(acc, scored, TARGET_RESULT_SIZE, seenKey, haveIds, gender);
+                    remain = TARGET_RESULT_SIZE - acc.size();
+                }
+            }
+        }
+
+        return acc.size() > TARGET_RESULT_SIZE
+                ? new ArrayList<>(acc.subList(0, TARGET_RESULT_SIZE))
+                : acc;
+    }
+
+    /** 중복/성별/제목유사 체크를 통과시키며 limit까지 acc에 추가 */
+    private void addUntil(List<CrawlingProduct> acc, List<Scored> incoming, int limit,
+                          Set<String> seenKeys, Set<Long> haveIds, Gender gender) {
+        for (Scored sc : incoming) {
+            if (acc.size() >= limit) break;
+            CrawlingProduct p = sc.p();
+            if (p == null) continue;
+            if (RecommendationUtil.blockedByGender(gender, p)) continue;
+            Long id = p.getId();
+            if (id != null && haveIds.contains(id)) continue;
+
+            String title = Optional.ofNullable(p.getDisplayName()).orElse(p.getOriginalName());
+            String baseTitle = RecommendationUtil.extractBaseTitle(title);
+            String key = baseTitle + "::" + Optional.ofNullable(p.getImageUrl()).orElse("");
+
+            boolean dupTitle = false;
+            for (String existing : seenKeys) {
+                String exTitle = existing.split("::", 2)[0];
+                double jac = RecommendationUtil.jaccardSimilarityByWords(exTitle, baseTitle);
+                if (jac >= TITLE_SIMILARITY_CUTOFF) { dupTitle = true; break; }
+            }
+            if (dupTitle) continue;
+
+            seenKeys.add(key);
+            if (id != null) haveIds.add(id);
+            acc.add(p);
+        }
+    }
+
+    /** 벡터 검색 결과 중 DB에 실제 존재하는 id만 남겨 내부 점수와 함께 정렬 */
+    private List<Scored> vectorSimilarFromDB(String keyword,
+                                             int minPrice, int maxPrice,
+                                             int need,
+                                             Set<Long> excludeIds,
+                                             RecommendationRequestDto req,
+                                             List<String> allKws) {
+        String q = buildVectorQuery(
+                Optional.ofNullable(req.preference()).orElse(""),
+                keyword, req, allKws
+        );
+        if (q.isBlank()) return List.of();
+
+        String reqAge = Optional.ofNullable(req.age()).orElse(null);
+        int topK = Math.max(need * VECTOR_TOPK_MULTIPLIER, 20);
+
+        List<VectorProductSearch.ScoredId> hits;
+        try {
+            hits = vectorProductSearch.searchWithScores(
+                    q, Math.max(minPrice, 0), maxOrMaxInt(maxPrice),
+                    reqAge, null, topK, VECTOR_THRESHOLD_DEFAULT
+            );
+        } catch (Exception e) {
+            log.warn("vector similar search failed: kw={}, err={}", keyword, e.toString());
+            return List.of();
+        }
+        if (hits == null || hits.isEmpty()) return List.of();
+
+        List<Long> ids = hits.stream()
+                .map(VectorProductSearch.ScoredId::productId)
+                .filter(Objects::nonNull)
+                .filter(id -> !excludeIds.contains(id))
+                .toList();
+        if (ids.isEmpty()) return List.of();
+
+        Map<Long, Double> scoreMap = hits.stream()
+                .collect(Collectors.toMap(
+                        VectorProductSearch.ScoredId::productId,
+                        VectorProductSearch.ScoredId::score,
+                        (a, b) -> a
+                ));
+
+        List<CrawlingProduct> loaded = new ArrayList<>();
+        crawlingProductRepository.findAllById(ids).forEach(loaded::add);
+
+        return loaded.stream()
+                .map(p -> new Scored(p, scoreMap.getOrDefault(p.getId(), 0.0)))
+                .sorted(Comparator.comparingDouble(Scored::s).reversed())
                 .toList();
     }
 
-    private List<CrawlingProduct> loadFromNaverByKeyword(String kw,
-                                                         int need,
-                                                         int minPrice,
-                                                         int maxPrice,
+    /** DB LIKE + 가격 범위 조회(레포지토리 커스텀 메서드 사용 가정) */
+    private List<CrawlingProduct> loadFromDbByNameOrCategory(String keyword, int minPrice, int maxPrice, Pageable top20) {
+        String kw = keyword.trim();
+        int min = Math.max(minPrice, 0);
+        int max = maxOrMaxInt(maxPrice);
+        List<CrawlingProduct> list = crawlingProductRepository
+                .findTopByNameOrCategoryLikeWithinPrice(kw, min, max, top20);
+        return new ArrayList<>(list.subList(0, Math.min(20, list.size())));
+    }
+
+    /** 외부(네이버) 페치: 실패 시 빈 리스트 반환 */
+    private List<CrawlingProduct> loadFromNaverByKeyword(String kw, int need,
+                                                         int minPrice, int maxPrice,
                                                          RecommendationRequestDto request) {
         if (need <= 0) return List.of();
         try {
             return crawlingProductImportService.fetchForKeyword(
-                    kw,
-                    minPrice,
-                    maxPrice,
+                    kw, minPrice, maxPrice,
                     Optional.ofNullable(request.age()).orElse(""),
                     Optional.ofNullable(request.reason()).orElse(""),
                     Optional.ofNullable(request.preference()).orElse(""),
@@ -523,91 +532,15 @@ public class RecommendationVectorService {
         }
     }
 
-    private List<CrawlingProduct> vectorCandidatesForKeywordPreferTitle(
-            String keyword,
-            int need,
-            int minPrice,
-            int maxPrice,
-            Set<Long> excludeIds,
-            String preference,
-            RecommendationRequestDto req,
-            List<String> allKws
-    ) {
-        if (need <= 0) return Collections.emptyList();
-
-        String q = buildVectorQuery(preference, keyword, req, allKws);
-        if (q.isBlank()) return Collections.emptyList();
-
-        String reqAge = Optional.ofNullable(req.age()).orElse(null);
-
-        int topK = Math.max(need * VECTOR_TOPK_MULTIPLIER, 10);
-        List<VectorProductSearch.ScoredId> scoredIds;
-        try {
-            scoredIds = vectorProductSearch.searchWithScores(
-                    q,
-                    Math.max(minPrice, 0),
-                    maxOrMaxInt(maxPrice),
-                    reqAge,
-                    null,
-                    topK,
-                    VECTOR_THRESHOLD_DEFAULT
-            );
-        } catch (Exception ex) {
-            log.warn("vector search failed: q={}, err={}", q, ex.toString());
-            return Collections.emptyList();
-        }
-        if (scoredIds == null || scoredIds.isEmpty()) return Collections.emptyList();
-
-        List<Long> ids = scoredIds.stream()
-                .map(VectorProductSearch.ScoredId::productId)
-                .filter(Objects::nonNull)
-                .filter(id -> !excludeIds.contains(id))
-                .toList();
-        if (ids.isEmpty()) return Collections.emptyList();
-
-        List<CrawlingProduct> loaded = new ArrayList<>();
-        crawlingProductRepository.findAllById(ids).forEach(loaded::add);
-
-        Map<Long, CrawlingProduct> byId = loaded.stream()
-                .filter(Objects::nonNull)
-                .collect(Collectors.toMap(CrawlingProduct::getId, p -> p, (a, b) -> a));
-
-        String kwLower = keyword.toLowerCase(Locale.ROOT);
-        List<CrawlingProduct> hardMatched = new ArrayList<>();
-        List<CrawlingProduct> others = new ArrayList<>();
-
-        for (VectorProductSearch.ScoredId sid : scoredIds) {
-            Long pid = sid.productId();
-            CrawlingProduct p = pid == null ? null : byId.get(pid);
-            if (p == null) continue;
-            String title = Optional.ofNullable(p.getDisplayName()).orElse(p.getOriginalName());
-            if (title != null && title.toLowerCase(Locale.ROOT).contains(kwLower)) {
-                hardMatched.add(p);
-            } else {
-                others.add(p);
-            }
-        }
-
-        List<CrawlingProduct> result = new ArrayList<>();
-        result.addAll(hardMatched);
-        result.addAll(others);
-
-        return result.size() > need ? result.subList(0, need) : result;
-    }
-
-    private int fillWithRulesLimited(List<CrawlingProduct> acc,
-                                     int cap,
-                                     int quotaForThisKeyword,
-                                     List<Scored> scored,
-                                     double titleJacCutoff,
-                                     int maxPerSeller,
-                                     Set<String> seenKeys,
-                                     Map<String, Integer> sellerCount,
-                                     Set<Long> pickedIds,
-                                     String preference,
-                                     String age,
-                                     String reason,
-                                     List<String> userKws) {
+    /**
+     * 특정 키워드 슬롯(kw)에만 넣을 수 있도록 제한하는 적재기
+     * - 제목 유사 중복 제거
+     * - PK 중복 제거
+     */
+    private int fillWithRulesLimitedForKeyword(
+            List<CrawlingProduct> acc, int cap, int quotaForThisKeyword, List<Scored> scored,
+            String keywordForThisSlot,
+            double titleJacCutoff, Set<String> seenKeys, Set<Long> pickedIds) {
 
         int added = 0;
         for (Scored sc : scored) {
@@ -615,16 +548,16 @@ public class RecommendationVectorService {
             if (added >= quotaForThisKeyword) break;
 
             CrawlingProduct p = sc.p();
+            if (p == null) continue;
             Long id = p.getId();
             if (id != null && pickedIds.contains(id)) continue;
-            if (!matchesAnyUserKeyword(p, userKws)) continue;
+
+            if (!keywordMatches(p, keywordForThisSlot)) continue;
 
             String title = Optional.ofNullable(p.getDisplayName()).orElse(p.getOriginalName());
             String baseTitle = RecommendationUtil.extractBaseTitle(title);
             String key = baseTitle + "::" + Optional.ofNullable(p.getImageUrl()).orElse("");
-            String seller = Optional.ofNullable(p.getSellerName()).orElse("").trim().toLowerCase(Locale.ROOT);
 
-            // 제목 중복 체크
             boolean dupTitle = false;
             for (String existing : seenKeys) {
                 String exTitle = existing.split("::", 2)[0];
@@ -632,13 +565,6 @@ public class RecommendationVectorService {
                 if (jac >= titleJacCutoff) { dupTitle = true; break; }
             }
             if (dupTitle) continue;
-
-            // 판매자 제한
-            if (!seller.isBlank()) {
-                int cnt = sellerCount.getOrDefault(seller, 0);
-                if (cnt >= maxPerSeller) continue;
-                sellerCount.put(seller, cnt + 1);
-            }
 
             seenKeys.add(key);
             acc.add(p);
@@ -648,31 +574,25 @@ public class RecommendationVectorService {
         return added;
     }
 
-    private void fillWithRules(List<CrawlingProduct> acc,
-                               int cap,
-                               List<Scored> scored,
-                               double titleJacCutoff,
-                               int maxPerSeller,
-                               Set<String> seenKeys,
-                               Map<String, Integer> sellerCount,
-                               Set<Long> pickedIds,
-                               String preference,
-                               String age,
-                               String reason,
-                               List<String> userKws) {
+    /** 전역 보충 적재기(후단 재분배에서 키워드 균형 보정) */
+    private void fillWithRulesAnyKeyword(
+            List<CrawlingProduct> acc, int cap, List<Scored> scored,
+            double titleJacCutoff, Set<String> seenKeys, Set<Long> pickedIds,
+            List<String> userKws) {
 
         for (Scored sc : scored) {
             if (acc.size() >= cap) break;
 
             CrawlingProduct p = sc.p();
+            if (p == null) continue;
             Long id = p.getId();
             if (id != null && pickedIds.contains(id)) continue;
+
             if (!matchesAnyUserKeyword(p, userKws)) continue;
 
             String title = Optional.ofNullable(p.getDisplayName()).orElse(p.getOriginalName());
             String baseTitle = RecommendationUtil.extractBaseTitle(title);
             String key = baseTitle + "::" + Optional.ofNullable(p.getImageUrl()).orElse("");
-            String seller = Optional.ofNullable(p.getSellerName()).orElse("").trim().toLowerCase(Locale.ROOT);
 
             boolean dupTitle = false;
             for (String existing : seenKeys) {
@@ -682,18 +602,109 @@ public class RecommendationVectorService {
             }
             if (dupTitle) continue;
 
-            if (!seller.isBlank()) {
-                int cnt = sellerCount.getOrDefault(seller, 0);
-                if (cnt >= maxPerSeller) continue;
-                sellerCount.put(seller, cnt + 1);
-            }
-
             seenKeys.add(key);
             acc.add(p);
             if (id != null) pickedIds.add(id);
         }
     }
 
+    /** 요청 컨텍스트에 유아/아기 맥락이 포함되면 true */
+    private boolean isBabyContext(RecommendationRequestDto req) {
+        String pref = Optional.ofNullable(req.preference()).orElse("");
+        String reason = Optional.ofNullable(req.reason()).orElse("");
+        String age = Optional.ofNullable(req.age()).orElse("");
+        return containsAnyIgnoreCase(pref, "출산", "육아", "베이비", "유아", "영유아")
+                || containsAnyIgnoreCase(reason, "출산", "출산선물", "돌잔치", "백일")
+                || containsAnyIgnoreCase(age, "영유아", "유아", "아기");
+    }
+
+    /** 상품이 유아/아기 도메인에 속하면 true */
+    private boolean isBabyDomain(CrawlingProduct p) {
+        String title = Optional.ofNullable(p.getDisplayName()).orElse(p.getOriginalName());
+        String category = Optional.ofNullable(p.getCategory()).orElse("");
+        List<String> tags = Optional.ofNullable(p.getKeywords()).orElse(List.of());
+
+        if (containsAnyIgnoreCase(title, "아기", "유아", "영유아", "출산", "육아")) return true;
+        if (containsAnyIgnoreCase(category, "유아", "아동", "유아동", "출산", "육아")) return true;
+        for (String t : tags) {
+            if (containsAnyIgnoreCase(t, "아기", "유아", "영유아", "출산", "육아")) return true;
+        }
+        return false;
+    }
+
+    /**
+     * 키워드 매칭 판정:
+     * 1) 제목/태그/카테고리 포함 → 2) 벡터 스토어로 강한 보조 → 3) 토큰 코사인으로 약한 보조
+     */
+    private boolean keywordMatches(CrawlingProduct p, String kw) {
+        if (p == null || kw == null || kw.isBlank()) return false;
+
+        String k = kw.toLowerCase(Locale.ROOT).trim();
+
+        String title = Optional.ofNullable(p.getDisplayName()).orElse(p.getOriginalName());
+        String titleLower = Optional.ofNullable(title).orElse("").toLowerCase(Locale.ROOT);
+        if (titleLower.contains(k)) return true;
+
+        List<String> tags = Optional.ofNullable(p.getKeywords()).orElse(List.of());
+        boolean inTags = tags.stream()
+                .filter(Objects::nonNull)
+                .map(t -> t.toLowerCase(Locale.ROOT))
+                .anyMatch(t -> t.contains(k));
+        if (inTags) return true;
+
+        String catLower = Optional.ofNullable(p.getCategory()).orElse("")
+                .toLowerCase(Locale.ROOT);
+        if (!catLower.isBlank() && catLower.contains(k)) return true;
+
+        // 벡터 스토어 확인(강)
+        if (p.getId() != null && vectorConfirmsMatch(p.getId(), k)) return true;
+
+        // 토큰 코사인 보조(약)
+        double tokenCos = cosineKeywordSimilarity(k, p);
+        return tokenCos >= COSINE_SIM_THRESHOLD;
+    }
+
+    /** 사용자 키워드 중 하나라도 매칭되면 true */
+    private boolean matchesAnyUserKeyword(CrawlingProduct p, List<String> userKws) {
+        if (p == null || userKws == null || userKws.isEmpty()) return false;
+        for (String kw : userKws) {
+            if (keywordMatches(p, kw)) return true;
+        }
+        return false;
+    }
+
+    /** 매칭된 사용자 키워드를 모두 수집(재분배 시 버킷 배치용) */
+    private List<String> findMatchedKeywords(CrawlingProduct p, List<String> userKws) {
+        List<String> matched = new ArrayList<>();
+        if (p == null || userKws == null || userKws.isEmpty()) return matched;
+        for (String kw : userKws) {
+            if (keywordMatches(p, kw)) matched.add(kw);
+        }
+        return matched;
+    }
+
+    /** 벡터 스토어가 특정 키워드-상품 매칭을 상위 점수로 확인해 주면 true */
+    private boolean vectorConfirmsMatch(Long productId, String keyword) {
+        try {
+            String q = "키워드:" + keyword;
+            int topK = 30;
+            List<VectorProductSearch.ScoredId> hits = vectorProductSearch.searchWithScores(
+                    q, 0, Integer.MAX_VALUE, null, null, topK, VECTOR_THRESHOLD_DEFAULT
+            );
+            if (hits == null || hits.isEmpty()) return false;
+
+            for (VectorProductSearch.ScoredId h : hits) {
+                if (Objects.equals(h.productId(), productId) && h.score() >= VECTOR_THRESHOLD_DEFAULT) {
+                    return true;
+                }
+            }
+        } catch (Exception e) {
+            log.debug("vectorConfirmsMatch fail: kw={}, id={}, err={}", keyword, productId, e.toString());
+        }
+        return false;
+    }
+
+    /** 가격 범위 체크 */
     private static boolean withinPrice(CrawlingProduct p, int minPrice, int maxPrice) {
         int price = Optional.ofNullable(p.getPrice()).orElse(0);
         if (minPrice > 0 && price < minPrice) return false;
@@ -701,10 +712,12 @@ public class RecommendationVectorService {
         return true;
     }
 
+    /** maxPrice가 0(무제한)이면 Integer.MAX_VALUE로 치환 */
     private static int maxOrMaxInt(int maxPrice) {
         return (maxPrice > 0) ? maxPrice : Integer.MAX_VALUE;
     }
 
+    /** 키워드 정규화(트림 + 중복 제거 + 상한) */
     private static List<String> normalizeKeywords(List<String> input) {
         if (input == null) return Collections.emptyList();
         LinkedHashSet<String> set = new LinkedHashSet<>();
@@ -713,28 +726,22 @@ public class RecommendationVectorService {
             String t = s.trim();
             if (!t.isEmpty()) set.add(t);
         }
-        return set.stream().limit(MAX_KEYWORDS).toList();
+        return set.stream().limit(MAX_KEYWORDS).collect(Collectors.toCollection(ArrayList::new));
     }
 
-    private static boolean matchesAnyUserKeyword(CrawlingProduct p, List<String> userKws) {
-        if (userKws == null || userKws.isEmpty() || p == null) return false;
-        String title = Optional.ofNullable(p.getDisplayName()).orElse(p.getOriginalName());
-        String titleLower = Optional.ofNullable(title).orElse("").toLowerCase(Locale.ROOT);
-        List<String> tags = Optional.ofNullable(p.getKeywords()).orElse(List.of());
-
-        for (String kw : userKws) {
-            if (kw == null || kw.isBlank()) continue;
-            String k = kw.toLowerCase(Locale.ROOT);
-            boolean inTitle = titleLower.contains(k);
-            boolean inTags = tags.stream()
-                    .anyMatch(t -> t != null && t.toLowerCase(Locale.ROOT).contains(k));
-            if (inTitle || inTags) return true;
-        }
-        return false;
+    /** 간단 토크나이저(영/숫/한글 유지, 나머지 공백) */
+    private static List<String> tokenize(String s) {
+        if (s == null || s.isBlank()) return List.of();
+        String norm = s.toLowerCase(Locale.ROOT).replaceAll("[^0-9a-zA-Z가-힣]", " ");
+        String[] arr = norm.split("\\s+");
+        List<String> out = new ArrayList<>();
+        for (String w : arr) if (!w.isBlank()) out.add(w);
+        return out;
     }
 
-    private String buildVectorQuery(String preference, String baseKw, RecommendationRequestDto req, List<String> allKws) {
-        String kw = Optional.ofNullable(baseKw).orElse("");
+    /** 벡터 쿼리 빌더(핵심/보조 키워드 + 힌트) */
+    private String buildVectorQuery(String preference, String baseKw,
+                                    RecommendationRequestDto req, List<String> allKws) {
         String others = allKws.stream()
                 .filter(k -> k != null && !k.equals(baseKw))
                 .limit(4)
@@ -745,29 +752,57 @@ public class RecommendationVectorService {
         String pref = Optional.ofNullable(preference).orElse("");
 
         return String.format(
-                "핵심키워드:[%s]; 보조키워드:[%s]. 힌트(무시 가능): relation=%s, age=%s, reason=%s, preference=%s",
-                kw, others, rel, age, reason, pref
+                "핵심키워드:[%s]; 보조키워드:[%s]. 힌트: relation=%s, age=%s, reason=%s, preference=%s",
+                baseKw, others, rel, age, reason, pref
         );
     }
 
-    private double domainAlignmentBoost(CrawlingProduct p, String preference) {
+    /** 키워드 vs 상품 토큰 코사인 근사(교집합/ |A|*|B| 의 제곱근) */
+    private double cosineKeywordSimilarity(String keyword, CrawlingProduct p) {
         String title = Optional.ofNullable(p.getDisplayName()).orElse(p.getOriginalName());
 
-        boolean babyInTitle = RecommendationUtil.isBabyKeywordIncluded(title);
-        boolean babyInTags = Optional.ofNullable(p.getKeywords()).orElse(List.of())
-                .stream()
-                .filter(Objects::nonNull)
-                .anyMatch(RecommendationUtil::isBabyKeywordIncluded);
-        boolean babyLike = babyInTitle || babyInTags;
+        List<String> tokens = new ArrayList<>();
+        if (title != null) tokens.addAll(tokenize(title));
+        List<String> tags = Optional.ofNullable(p.getKeywords()).orElse(List.of());
+        for (String t : tags) {
+            if (t != null) tokens.addAll(tokenize(t));
+        }
 
-        boolean babyPref = containsAnyIgnoreCase(preference, "출산", "육아", "유아", "영유아", "아기", "베이비");
+        Set<String> a = new HashSet<>(tokenize(keyword));
+        Set<String> b = new HashSet<>(tokens);
+        if (a.isEmpty() || b.isEmpty()) return 0.0;
 
-        if (babyPref && babyLike) return 1.2;
-        if (babyPref && !babyLike) return 0.4;
-        if (!babyPref && babyLike) return -0.2;
-        return 0.0;
+        int inter = 0;
+        for (String x : a) if (b.contains(x)) inter++;
+        return inter / Math.sqrt((double) a.size() * (double) b.size());
     }
 
+    /** 같은 상품 판정: (id 우선) → productUrl 백업 */
+    private boolean sameProduct(CrawlingProduct a, CrawlingProduct b) {
+        if (a == null || b == null) return false;
+        Long aId = a.getId();
+        Long bId = b.getId();
+        if (aId != null && bId != null) return aId.equals(bId);
+        String aUrl = Optional.ofNullable(a.getProductUrl()).orElse("").trim();
+        String bUrl = Optional.ofNullable(b.getProductUrl()).orElse("").trim();
+        return !aUrl.isEmpty() && aUrl.equals(bUrl);
+    }
+
+    /** 리스트 내 중복 여부 */
+    private boolean alreadyContains(List<CrawlingProduct> list, CrawlingProduct p) {
+        if (list == null || p == null) return false;
+        for (CrawlingProduct ex : list) if (sameProduct(ex, p)) return true;
+        return false;
+    }
+
+    /** 버킷 내 중복 여부 */
+    private boolean alreadyContainsBucket(List<CrawlingProduct> bucket, CrawlingProduct p) {
+        if (bucket == null || p == null) return false;
+        for (CrawlingProduct ex : bucket) if (sameProduct(ex, p)) return true;
+        return false;
+    }
+
+    /** 부분 문자열 포함(대소문자 무시) */
     private boolean containsAnyIgnoreCase(String src, String... needles) {
         if (src == null || src.isBlank()) return false;
         String s = src.toLowerCase(Locale.ROOT);
@@ -777,6 +812,7 @@ public class RecommendationVectorService {
         return false;
     }
 
+    /** 게스트 존재 검증 */
     private Guest existsGuest(UUID id) {
         return guestRepository.findById(id)
                 .orElseThrow(() -> {
@@ -785,6 +821,7 @@ public class RecommendationVectorService {
                 });
     }
 
+    /** 추천 세션 존재 검증 */
     private RecommendationSession existsRecommendationSession(UUID id) {
         return sessionRepository.findById(id)
                 .orElseThrow(() -> {
@@ -793,6 +830,7 @@ public class RecommendationVectorService {
                 });
     }
 
+    /** 세션-게스트 소유권 검증 */
     private static void verifySessionOwner(RecommendationSession session, Guest guest) {
         if (!session.getGuest().getId().equals(guest.getId())) {
             log.error("세션 접근 권한 오류 | sessionId={}, guestId={}", session.getId(), guest.getId());
