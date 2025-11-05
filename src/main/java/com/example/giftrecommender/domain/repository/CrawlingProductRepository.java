@@ -92,9 +92,18 @@ public interface CrawlingProductRepository extends JpaRepository<CrawlingProduct
 
     List<CrawlingProduct> findTop200ByOrderByIdDesc();
 
-    List<CrawlingProduct> findTop20ByDisplayNameContainingIgnoreCaseAndPriceBetweenOrderByIdDesc(
-            String displayName,
-            int minPrice,
-            int maxPrice
+    @Query("""
+       select p from CrawlingProduct p
+       where (p.price between :minPrice and :maxPrice)
+         and ( lower(p.displayName) like lower(concat('%', :kw, '%'))
+            or lower(coalesce(p.category, '')) like lower(concat('%', :kw, '%')) )
+       order by coalesce(p.score, 0) desc, p.id desc
+       """)
+    List<CrawlingProduct> findTopByNameOrCategoryLikeWithinPrice(
+            @Param("kw") String keyword,
+            @Param("minPrice") int minPrice,
+            @Param("maxPrice") int maxPrice,
+            Pageable pageable
     );
+
 }
