@@ -124,6 +124,9 @@ public class CrawlingProduct {
     public void addScore(int score) {
         this.score += score;
     }
+    public void addKeywords(List<String> keywords) {
+        this.keywords = keywords;
+    }
 
     public void changeAdminCheck(boolean adminCheck) {
         this.adminCheck = adminCheck;

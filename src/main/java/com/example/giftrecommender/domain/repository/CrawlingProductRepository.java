@@ -11,6 +11,7 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.Collection;
 import java.util.List;
 
 public interface CrawlingProductRepository extends JpaRepository<CrawlingProduct, Long> {
@@ -105,5 +106,7 @@ public interface CrawlingProductRepository extends JpaRepository<CrawlingProduct
             @Param("maxPrice") int maxPrice,
             Pageable pageable
     );
+
+    List<CrawlingProduct> findByIdIn(Collection<Long> ids);
 
 }

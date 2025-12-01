@@ -12,6 +12,8 @@ import com.example.giftrecommender.dto.request.gender.GenderBulkRequestDto;
 import com.example.giftrecommender.dto.request.gender.GenderRequestDto;
 import com.example.giftrecommender.dto.request.product.CrawlingProductRequestDto;
 import com.example.giftrecommender.dto.request.product.CrawlingProductUpdateRequestDto;
+import com.example.giftrecommender.dto.request.product.ProductKeywordBulkSaveRequest;
+import com.example.giftrecommender.dto.request.product.ProductKeywordBulkUpdateRequest;
 import com.example.giftrecommender.dto.response.*;
 import com.example.giftrecommender.dto.response.age.AgeBulkResponseDto;
 import com.example.giftrecommender.dto.response.age.AgeResponseDto;
@@ -21,9 +23,13 @@ import com.example.giftrecommender.dto.response.gender.GenderBulkResponseDto;
 import com.example.giftrecommender.dto.response.gender.GenderResponseDto;
 import com.example.giftrecommender.dto.response.product.CrawlingProductBulkSaveResponseDto;
 import com.example.giftrecommender.dto.response.product.CrawlingProductResponseDto;
+import com.example.giftrecommender.dto.response.product.ProductKeywordBulkSaveResponse;
 import com.example.giftrecommender.service.CrawlingProductSaver;
 import com.example.giftrecommender.service.CrawlingProductService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -170,6 +176,38 @@ public class CrawlingProductController {
     ) {
         GenderBulkResponseDto result = crawlingProductService.updateGenderBulk(request);
         return ResponseEntity.ok(BasicResponseDto.success("성별 일괄 변경 완료", result));
+    }
+
+    @Operation(
+            summary = "여러 크롤링 상품에 키워드를 일괄 저장",
+            description = """
+                    관리자 페이지에서 여러 크롤링 상품을 선택한 뒤,
+                    공통 키워드 목록을 한 번에 저장할 때 사용하는 API입니다.
+                    """
+    )
+    @PostMapping("/keywords/bulk-add")
+    public ResponseEntity<BasicResponseDto<ProductKeywordBulkSaveResponse>> saveKeywordsInBulk(
+            @Valid @RequestBody ProductKeywordBulkSaveRequest request
+    ) {
+        ProductKeywordBulkSaveResponse response = crawlingProductService.saveKeywordsBulk(request);
+        return ResponseEntity.ok(BasicResponseDto.success("선택한 상품에 키워드가 성공적으로 추가되었습니다.", response));
+    }
+
+    @Operation(
+            summary = "여러 크롤링 상품의 키워드를 일괄 수정(덮어쓰기)",
+            description = """
+                선택된 여러 상품의 기존 키워드를 모두 삭제하고
+                입력된 키워드 목록으로 덮어씌우는 관리자용 API입니다.
+                """
+    )
+    @PostMapping("/keywords/bulk-update")
+    public ResponseEntity<BasicResponseDto<ProductKeywordBulkSaveResponse>> updateKeywordsInBulk(
+            @Valid @RequestBody ProductKeywordBulkUpdateRequest request
+    ) {
+        ProductKeywordBulkSaveResponse response = crawlingProductService.updateKeywordsBulk(request);
+        return ResponseEntity.ok(
+                BasicResponseDto.success("선택한 상품의 키워드가 성공적으로 수정되었습니다.", response)
+        );
     }
 
 }
