@@ -32,6 +32,7 @@ import com.example.giftrecommender.vector.ProductVectorService;
 import jakarta.validation.ConstraintViolationException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.core.NestedExceptionUtils;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
@@ -55,7 +56,7 @@ public class CrawlingProductService {
 
     private final CrawlingProductRepository crawlingProductRepository;
     private final CrawlingProductSaver crawlingProductSaver;
-    private final ProductVectorService productVectorService;
+    private final ObjectProvider<ProductVectorService> productVectorServiceProvider;
 
     /*
      * 여러건 저장
@@ -604,6 +605,12 @@ public class CrawlingProductService {
      */
     private void syncProductVectorSafely(CrawlingProduct product) {
         try {
+            ProductVectorService vectorService = productVectorServiceProvider.getIfAvailable();
+            if (vectorService == null) {
+                log.info("[INFO] Vector feature disabled (vector.enabled=false), Qdrant sync will be skipped.");
+                return;
+            }
+
             if (product == null || product.getId() == null) return;
 
             String title = product.getDisplayName();
@@ -618,7 +625,7 @@ public class CrawlingProductService {
             long price = product.getPrice() != null ? product.getPrice().longValue() : 0L;
             List<String> keywords = product.getKeywords();
 
-            productVectorService.upsertProduct(
+            vectorService.upsertProduct(
                     product.getId(),
                     title,
                     price,
