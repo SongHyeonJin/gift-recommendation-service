@@ -17,6 +17,8 @@ import com.example.giftrecommender.dto.request.gender.GenderBulkRequestDto;
 import com.example.giftrecommender.dto.request.gender.GenderRequestDto;
 import com.example.giftrecommender.dto.request.product.CrawlingProductRequestDto;
 import com.example.giftrecommender.dto.request.product.CrawlingProductUpdateRequestDto;
+import com.example.giftrecommender.dto.request.product.ProductKeywordBulkSaveRequest;
+import com.example.giftrecommender.dto.request.product.ProductKeywordBulkUpdateRequest;
 import com.example.giftrecommender.dto.response.*;
 import com.example.giftrecommender.dto.response.age.AgeBulkResponseDto;
 import com.example.giftrecommender.dto.response.age.AgeResponseDto;
@@ -24,14 +26,13 @@ import com.example.giftrecommender.dto.response.confirm.ConfirmBulkResponseDto;
 import com.example.giftrecommender.dto.response.confirm.ConfirmResponseDto;
 import com.example.giftrecommender.dto.response.gender.GenderBulkResponseDto;
 import com.example.giftrecommender.dto.response.gender.GenderResponseDto;
-import com.example.giftrecommender.dto.response.product.BulkItemResultDto;
-import com.example.giftrecommender.dto.response.product.BulkSummaryDto;
-import com.example.giftrecommender.dto.response.product.CrawlingProductBulkSaveResponseDto;
-import com.example.giftrecommender.dto.response.product.CrawlingProductResponseDto;
+import com.example.giftrecommender.dto.response.product.*;
 import com.example.giftrecommender.mapper.CrawlingProductMapper;
+import com.example.giftrecommender.vector.ProductVectorService;
 import jakarta.validation.ConstraintViolationException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.core.NestedExceptionUtils;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
@@ -44,10 +45,8 @@ import org.springframework.transaction.UnexpectedRollbackException;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.math.BigDecimal;
 import java.sql.SQLIntegrityConstraintViolationException;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -57,6 +56,7 @@ public class CrawlingProductService {
 
     private final CrawlingProductRepository crawlingProductRepository;
     private final CrawlingProductSaver crawlingProductSaver;
+    private final ObjectProvider<ProductVectorService> productVectorServiceProvider;
 
     /*
      * 여러건 저장
@@ -250,12 +250,16 @@ public class CrawlingProductService {
         CrawlingProduct product = crawlingProductRepository.findById(productId)
                 .orElseThrow(() -> new ErrorException(ExceptionEnum.PRODUCT_NOT_FOUND));
 
-        // displayName
+        boolean keywordsChanged = false;
+        boolean textChanged = false;
+
+        // displayName / originalName
         if (requestDto.originalName() != null) {
             String originalName = requestDto.originalName();
 
             product.changeOriginalName(originalName);
             product.changeDisplayName(generateDisplayName(originalName));
+            textChanged = true;
         }
 
         // price
@@ -271,12 +275,14 @@ public class CrawlingProductService {
         // category
         if (requestDto.category() != null) {
             product.changeCategory(requestDto.category().trim());
+            textChanged = true;
         }
 
         // keywords
         if (requestDto.keywords() != null) {
             List<String> normalized = normalizeKeywords(requestDto.keywords());
             product.changeKeywords(normalized);
+            keywordsChanged = true;
         }
 
         // sellerName / platform
@@ -299,6 +305,10 @@ public class CrawlingProductService {
         }
 
         validatePrice(product.getPrice());
+
+        if (keywordsChanged || textChanged) {
+            syncProductVectorSafely(product);
+        }
 
         return CrawlingProductMapper.toDto(product);
     }
@@ -411,21 +421,96 @@ public class CrawlingProductService {
         return new GenderBulkResponseDto(affected, request.ids(), request.gender());
     }
 
-    private int calculateScore(BigDecimal rating, Integer reviewCount) {
-        int score = 0;
-        if (rating != null && rating.compareTo(BigDecimal.valueOf(4.2)) >= 0) {
-            score += 1;
+    /*
+     * 키워드 일괄 저장 (기존 키워드는 유지하고, 입력한 키워드만 추가)
+     */
+    @Transactional
+    public ProductKeywordBulkSaveResponse saveKeywordsBulk(ProductKeywordBulkSaveRequest request) {
+        if (request == null
+                || request.productIds() == null || request.productIds().isEmpty()
+                || request.keywords() == null || request.keywords().isEmpty()) {
+            throw new ErrorException(ExceptionEnum.INVALID_REQUEST);
         }
-        if (reviewCount != null && reviewCount >= 100) {
-            score += 1;
+
+        List<CrawlingProduct> products = crawlingProductRepository.findByIdIn(request.productIds());
+
+        // 요청 개수와 실제 조회 개수가 다르면 에러
+        if (products.size() != request.productIds().size()) {
+            Set<Long> requested = new HashSet<>(request.productIds());
+            Set<Long> found = products.stream()
+                    .map(CrawlingProduct::getId)
+                    .collect(Collectors.toSet());
+            requested.removeAll(found); // 존재하지 않는 ID들
+
+            log.warn("키워드 일괄 추가 중 일부 상품을 찾지 못했습니다. missingIds={}", requested);
+            throw new ErrorException(ExceptionEnum.PRODUCT_NOT_FOUND);
         }
-        if (reviewCount != null && reviewCount >= 1000 && rating != null && rating.compareTo(BigDecimal.valueOf(4.5)) >= 0) {
-            score += 1;
+
+        List<String> normalizedNewKeywords = normalizeKeywords(request.keywords());
+
+        for (CrawlingProduct product : products) {
+            List<String> existing = product.getKeywords();
+            if (existing == null) {
+                existing = new ArrayList<>();
+            }
+
+            LinkedHashSet<String> merged = new LinkedHashSet<>(existing);
+            merged.addAll(normalizedNewKeywords);
+
+            product.changeKeywords(new ArrayList<>(merged));
         }
-        if (reviewCount != null && reviewCount >= 10000 && rating != null && rating.compareTo(BigDecimal.valueOf(4.3)) >= 0) {
-            score += 1;
+
+        syncProductVectorSafely(products);
+
+        List<Long> ids = products.stream()
+                .map(CrawlingProduct::getId)
+                .toList();
+
+        log.info("CrawlingProduct 키워드 일괄 추가 완료. affected={}", ids.size());
+
+        return new ProductKeywordBulkSaveResponse(ids.size(), ids, normalizedNewKeywords);
+    }
+
+    /*
+     * 키워드 일괄 수정 (기존 키워드를 모두 덮어쓰기)
+     */
+    @Transactional
+    public ProductKeywordBulkSaveResponse updateKeywordsBulk(ProductKeywordBulkUpdateRequest request) {
+
+        if (request == null
+                || request.productIds() == null || request.productIds().isEmpty()
+                || request.keywords() == null || request.keywords().isEmpty()) {
+            throw new ErrorException(ExceptionEnum.INVALID_REQUEST);
         }
-        return score;
+
+        List<CrawlingProduct> products = crawlingProductRepository.findByIdIn(request.productIds());
+
+        if (products.size() != request.productIds().size()) {
+            Set<Long> requested = new HashSet<>(request.productIds());
+            Set<Long> found = products.stream()
+                    .map(CrawlingProduct::getId)
+                    .collect(Collectors.toSet());
+            requested.removeAll(found);
+
+            log.warn("키워드 일괄 수정 중 일부 상품을 찾지 못했습니다. missingIds={}", requested);
+            throw new ErrorException(ExceptionEnum.PRODUCT_NOT_FOUND);
+        }
+
+        List<String> normalized = normalizeKeywords(request.keywords());
+
+        for (CrawlingProduct product : products) {
+            product.changeKeywords(new ArrayList<>(normalized));
+        }
+
+        syncProductVectorSafely(products);
+
+        List<Long> ids = products.stream()
+                .map(CrawlingProduct::getId)
+                .toList();
+
+        log.info("CrawlingProduct 키워드 일괄 수정 완료. affected={}", ids.size());
+
+        return new ProductKeywordBulkSaveResponse(ids.size(), ids, normalized);
     }
 
     private String generateDisplayName(String originalName) {
@@ -515,6 +600,52 @@ public class CrawlingProductService {
                 .collect(Collectors.joining("; "));
     }
 
+    /*
+     * Qdrant 벡터 스토어 동기화 (단건) - 실패해도 메인 로직은 터지지 않게 방어
+     */
+    private void syncProductVectorSafely(CrawlingProduct product) {
+        try {
+            ProductVectorService vectorService = productVectorServiceProvider.getIfAvailable();
+            if (vectorService == null) {
+                log.info("[INFO] Vector feature disabled (vector.enabled=false), Qdrant sync will be skipped.");
+                return;
+            }
+
+            if (product == null || product.getId() == null) return;
+
+            String title = product.getDisplayName();
+            if (title == null || title.isBlank()) {
+                title = product.getOriginalName();
+            }
+            if (title == null || title.isBlank()) {
+                log.warn("Qdrant 동기화 스킵 - title 없음. productId={}", product.getId());
+                return;
+            }
+
+            long price = product.getPrice() != null ? product.getPrice().longValue() : 0L;
+            List<String> keywords = product.getKeywords();
+
+            vectorService.upsertProduct(
+                    product.getId(),
+                    title,
+                    price,
+                    keywords
+            );
+        } catch (Exception e) {
+            log.warn("Qdrant 벡터 동기화 실패. productId={}, cause={}",
+                    product.getId(), e.getMessage(), e);
+        }
+    }
+
+    /*
+     * Qdrant 벡터 스토어 동기화 (다건)
+     */
+    private void syncProductVectorSafely(List<CrawlingProduct> products) {
+        if (products == null || products.isEmpty()) return;
+        for (CrawlingProduct product : products) {
+            syncProductVectorSafely(product);
+        }
+    }
 
     private List<String> normalizeKeywords(List<String> kws) {
         return kws.stream()
