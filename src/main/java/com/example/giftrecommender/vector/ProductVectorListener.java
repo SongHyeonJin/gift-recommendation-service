@@ -1,5 +1,6 @@
 package com.example.giftrecommender.vector;
 
+import com.example.giftrecommender.domain.entity.CrawlingProduct;
 import com.example.giftrecommender.domain.repository.CrawlingProductRepository;
 import com.example.giftrecommender.vector.event.ProductCreatedEvent;
 import com.openai.errors.RateLimitException;
@@ -32,6 +33,14 @@ public class ProductVectorListener {
             return;
         }
 
+        CrawlingProduct product = crawlingProductRepository.findById(event.productId())
+                .orElse(null);
+
+        if (product == null) {
+            log.warn("[VECTOR] skip - product not found. id={}", event.productId());
+            return;
+        }
+
         List<String> keywords = crawlingProductRepository.findKeywordsById(event.productId());
 
         int maxRetries = 3;
@@ -39,19 +48,19 @@ public class ProductVectorListener {
 
         for (int attempt = 1; attempt <= maxRetries; attempt++) {
             try {
-                // OpenAI → Qdrant 업서트
                 productVectorService.upsertProduct(
-                        event.productId(),
-                        event.displayName(),
-                        event.price(),
+                        product.getId(),
+                        product.getDisplayName(),
+                        product.getPrice(),
+                        product.getCategory(),
+                        product.getShortDescription(),
                         keywords
                 );
 
-                // DB 상태 갱신 (새 트랜잭션으로 처리)
-                statusService.markEmbeddingReady(event.productId());
+                statusService.markEmbeddingReady(product.getId());
 
                 log.info("[VECTOR] upsert ok id={}, attempt={}, keywords.size={}",
-                        event.productId(), attempt, (keywords == null ? 0 : keywords.size()));
+                        product.getId(), attempt, (keywords == null ? 0 : keywords.size()));
                 return;
 
             } catch (RateLimitException e) {
@@ -59,7 +68,7 @@ public class ProductVectorListener {
                         attempt, maxRetries, backoffMs, e.getMessage());
             } catch (Exception e) {
                 log.error("[VECTOR] upsert failed id={}, attempt={}, cause={}",
-                        event.productId(), attempt, e.toString());
+                        product.getId(), attempt, e.toString());
             }
 
             try {
@@ -71,8 +80,6 @@ public class ProductVectorListener {
             backoffMs *= 2;
         }
 
-        log.error("[VECTOR] upsert permanently failed id={}", event.productId());
+        log.error("[VECTOR] upsert permanently failed id={}", product.getId());
     }
-
 }
-
