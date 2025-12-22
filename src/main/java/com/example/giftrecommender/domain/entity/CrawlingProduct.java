@@ -30,6 +30,10 @@ public class CrawlingProduct {
     @Column(name = "display_name", length = 255)
     private String displayName;
 
+    // 상품 의미 보완용 짧은 설명 (벡터 임베딩 보완 목적)
+    @Column(name = "short_description", length = 255)
+    private String shortDescription;
+
     // 가격 (원 단위)
     @Column(nullable = false)
     private Integer price;
@@ -124,8 +128,13 @@ public class CrawlingProduct {
     public void addScore(int score) {
         this.score += score;
     }
+
     public void addKeywords(List<String> keywords) {
         this.keywords = keywords;
+    }
+
+    public void addShortDescription(String shortDescription) {
+        this.shortDescription = shortDescription;
     }
 
     public void changeAdminCheck(boolean adminCheck) {
@@ -143,6 +152,7 @@ public class CrawlingProduct {
     public void changeGender(Gender gender) {
         this.gender = gender;
     }
+
     public void changeOriginalName(String originalName) { this.originalName = originalName; }
     public void changeDisplayName(String displayName) { this.displayName = displayName; }
     public void changePrice(Integer price) { this.price = price; }
@@ -152,34 +162,65 @@ public class CrawlingProduct {
     public void changeKeywords(List<String> keywords) { this.keywords = keywords; }
     public void changeSellerName(String sellerName) { this.sellerName = sellerName; }
     public void changePlatform(String platform) { this.platform = platform; }
+
+    public void changeShortDescription(String shortDescription) {
+        if (shortDescription == null) {
+            this.shortDescription = null;
+            return;
+        }
+        String trimmed = shortDescription.trim();
+        this.shortDescription = trimmed.isEmpty() ? null : trimmed;
+    }
+
     public void markEmbedding(Long pointId, String model, boolean ready) {
         this.vectorPointId = pointId;
         this.embeddingModel = model;
         this.embeddingReady = ready;
     }
+
     public void markEmbeddingReady() {
         this.embeddingReady = true;
     }
 
     @Builder
-    public CrawlingProduct(String originalName, String displayName, Integer price, String imageUrl,
-                           String productUrl, String category, List<String> keywords, Integer reviewCount, BigDecimal rating,
-                           Integer score, String sellerName, String platform, Gender gender, Age age, Boolean isAdvertised) {
+    public CrawlingProduct(String originalName,
+                           String displayName,
+                           String shortDescription,
+                           Integer price,
+                           String imageUrl,
+                           String productUrl,
+                           String category,
+                           List<String> keywords,
+                           Integer reviewCount,
+                           BigDecimal rating,
+                           Integer score,
+                           String sellerName,
+                           String platform,
+                           Gender gender,
+                           Age age,
+                           Boolean isAdvertised) {
+
         this.originalName = originalName;
         this.displayName = displayName;
+        this.shortDescription = (shortDescription == null || shortDescription.trim().isEmpty())
+                ? null
+                : shortDescription.trim();
+
         this.price = price;
         this.imageUrl = imageUrl;
         this.productUrl = productUrl;
         this.category = category;
-        this.keywords = keywords;
+
+        this.keywords = (keywords == null) ? Collections.emptyList() : keywords;
+
         this.reviewCount = reviewCount;
         this.rating = rating;
         this.score = score != null ? score : 0;
         this.sellerName = sellerName;
         this.platform = platform;
         this.gender = (gender != null) ? gender : Gender.ANY;
-        this.age    = (age != null) ? age : Age.NONE;
-        this.isAdvertised = isAdvertised;
+        this.age = (age != null) ? age : Age.NONE;
+        this.isAdvertised = Boolean.TRUE.equals(isAdvertised);
     }
 
     public static CrawlingRecommendedProductResponseDto from(CrawlingProduct p) {
@@ -187,8 +228,7 @@ public class CrawlingProduct {
         int reviewCount = p.getReviewCount() == null ? 0 : p.getReviewCount();
         BigDecimal rating = p.getRating() == null ? new BigDecimal("0.0") : p.getRating();
         List<String> keywords = p.getKeywords() == null ? Collections.emptyList() : p.getKeywords();
-        boolean advertised =
-                Boolean.TRUE.equals(p.getIsAdvertised());
+        boolean advertised = Boolean.TRUE.equals(p.getIsAdvertised());
 
         return new CrawlingRecommendedProductResponseDto(
                 p.getId(),
@@ -209,4 +249,3 @@ public class CrawlingProduct {
         return products.stream().map(CrawlingRecommendedProductResponseDto::from).toList();
     }
 }
-
