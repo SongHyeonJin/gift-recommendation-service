@@ -16,25 +16,72 @@ import java.util.List;
 
 public interface CrawlingProductRepository extends JpaRepository<CrawlingProduct, Long> {
 
-    @Query("""
-        SELECT p FROM CrawlingProduct p
-        WHERE (:keyword IS NULL OR 
-              p.originalName LIKE CONCAT('%', :keyword, '%') OR
-              p.displayName  LIKE CONCAT('%', :keyword, '%') OR
-              p.sellerName   LIKE CONCAT('%', :keyword, '%') OR
-              p.category     LIKE CONCAT('%', :keyword, '%') OR
-              p.platform     LIKE CONCAT('%', :keyword, '%'))
-          AND (:minPrice IS NULL OR p.price >= :minPrice)
-          AND (:maxPrice IS NULL OR p.price <= :maxPrice)
-          AND (:category IS NULL OR p.category = :category)
-          AND (:platform IS NULL OR p.platform = :platform)
-          AND (:sellerName IS NULL OR p.sellerName = :sellerName)
-          AND (:gender IS NULL OR p.gender = :gender)
-          AND (:age IS NULL OR p.age = :age)
-          AND (:isConfirmed IS NULL OR p.isConfirmed = :isConfirmed)
-        """)
+    @Query(
+            value = """
+        SELECT DISTINCT p
+        FROM CrawlingProduct p
+        LEFT JOIN p.keywords k
+        WHERE (
+            :keyword IS NULL OR
+            p.originalName LIKE CONCAT('%', :keyword, '%') OR
+            p.displayName  LIKE CONCAT('%', :keyword, '%') OR
+            p.sellerName   LIKE CONCAT('%', :keyword, '%') OR
+            p.category     LIKE CONCAT('%', :keyword, '%') OR
+            p.platform     LIKE CONCAT('%', :keyword, '%') OR
+            k              LIKE CONCAT('%', :keyword, '%') OR
+            (
+            :keywordNoSpace IS NOT NULL AND (
+                function('replace', p.originalName, ' ', '') LIKE CONCAT('%', :keywordNoSpace, '%') OR
+                function('replace', p.displayName,  ' ', '') LIKE CONCAT('%', :keywordNoSpace, '%') OR
+                function('replace', p.sellerName,   ' ', '') LIKE CONCAT('%', :keywordNoSpace, '%') OR
+                function('replace', p.category,     ' ', '') LIKE CONCAT('%', :keywordNoSpace, '%') OR
+                function('replace', p.platform,     ' ', '') LIKE CONCAT('%', :keywordNoSpace, '%') OR
+                function('replace', k,              ' ', '') LIKE CONCAT('%', :keywordNoSpace, '%')
+            ))
+        )
+        AND (:minPrice IS NULL OR p.price >= :minPrice)
+        AND (:maxPrice IS NULL OR p.price <= :maxPrice)
+        AND (:category IS NULL OR p.category = :category)
+        AND (:platform IS NULL OR p.platform = :platform)
+        AND (:sellerName IS NULL OR p.sellerName = :sellerName)
+        AND (:gender IS NULL OR p.gender = :gender)
+        AND (:age IS NULL OR p.age = :age)
+        AND (:isConfirmed IS NULL OR p.isConfirmed = :isConfirmed)
+        """,
+            countQuery = """
+        SELECT COUNT(DISTINCT p)
+        FROM CrawlingProduct p
+        LEFT JOIN p.keywords k
+        WHERE (
+            :keyword IS NULL OR
+            p.originalName LIKE CONCAT('%', :keyword, '%') OR
+            p.displayName  LIKE CONCAT('%', :keyword, '%') OR
+            p.sellerName   LIKE CONCAT('%', :keyword, '%') OR
+            p.category     LIKE CONCAT('%', :keyword, '%') OR
+            p.platform     LIKE CONCAT('%', :keyword, '%') OR
+            k              LIKE CONCAT('%', :keyword, '%') OR
+            (:keywordNoSpace IS NOT NULL AND (
+                function('replace', p.originalName, ' ', '') LIKE CONCAT('%', :keywordNoSpace, '%') OR
+                function('replace', p.displayName,  ' ', '') LIKE CONCAT('%', :keywordNoSpace, '%') OR
+                function('replace', p.sellerName,   ' ', '') LIKE CONCAT('%', :keywordNoSpace, '%') OR
+                function('replace', p.category,     ' ', '') LIKE CONCAT('%', :keywordNoSpace, '%') OR
+                function('replace', p.platform,     ' ', '') LIKE CONCAT('%', :keywordNoSpace, '%') OR
+                function('replace', k,              ' ', '') LIKE CONCAT('%', :keywordNoSpace, '%')
+            ))
+        )
+        AND (:minPrice IS NULL OR p.price >= :minPrice)
+        AND (:maxPrice IS NULL OR p.price <= :maxPrice)
+        AND (:category IS NULL OR p.category = :category)
+        AND (:platform IS NULL OR p.platform = :platform)
+        AND (:sellerName IS NULL OR p.sellerName = :sellerName)
+        AND (:gender IS NULL OR p.gender = :gender)
+        AND (:age IS NULL OR p.age = :age)
+        AND (:isConfirmed IS NULL OR p.isConfirmed = :isConfirmed)
+        """
+    )
     Page<CrawlingProduct> search(
             @Param("keyword") String keyword,
+            @Param("keywordNoSpace") String keywordNoSpace,
             @Param("minPrice") Integer minPrice,
             @Param("maxPrice") Integer maxPrice,
             @Param("category") String category,
@@ -80,6 +127,10 @@ public interface CrawlingProductRepository extends JpaRepository<CrawlingProduct
     """)
     List<BackfillIdView> findAllIdsForQdrantKeywordBackfill();
 
+    // 카테고리만 가져오는 간단한 쿼리
+    @Query("select c.category from CrawlingProduct c where c.id = :id")
+    String findCategoryById(@Param("id") Long id);
+
     // 단건 키워드만 조회
     @Query("""
         select kw
@@ -108,5 +159,20 @@ public interface CrawlingProductRepository extends JpaRepository<CrawlingProduct
     );
 
     List<CrawlingProduct> findByIdIn(Collection<Long> ids);
+
+    @Query("""
+        select c
+        from CrawlingProduct c
+        join c.keywords k
+        where lower(k) like lower(concat('%', :keyword, '%'))
+    """)
+    List<CrawlingProduct> findByKeyword(@Param("keyword") String keyword);
+
+    @Query("select p.shortDescription from CrawlingProduct p where p.id = :id")
+    String findShortDescriptionById(@Param("id") Long id);
+
+    Page<CrawlingProduct> findByShortDescriptionIsNull(Pageable pageable);
+
+    List<CrawlingProduct> findByIdGreaterThanOrderByIdAsc(Long lastId, Pageable pageable);
 
 }

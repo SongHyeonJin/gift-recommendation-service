@@ -8,5 +8,7 @@ package com.example.giftrecommender.vector.event;
 public record ProductCreatedEvent(
         Long productId,
         String displayName,
-        long price
+        long price,
+        String category,
+        String shortDescription
 ) { }

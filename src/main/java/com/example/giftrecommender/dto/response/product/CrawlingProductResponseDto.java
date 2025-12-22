@@ -20,6 +20,9 @@ public record CrawlingProductResponseDto(
         @Schema(description = "사용자에게 표시할 상품명", example = "USB 멀티탭 3구")
         String displayName,
 
+        @Schema(description = "상품 의미 보완용 짧은 설명", example = "USB 포트를 포함한 컴팩트한 멀티탭")
+        String shortDescription,
+
         @Schema(description = "가격 (원 단위)", example = "15900")
         Integer price,
 
@@ -72,11 +75,13 @@ public record CrawlingProductResponseDto(
         LocalDateTime updatedAt
 
 ) {
+
         public static CrawlingProductResponseDto from(CrawlingProduct product) {
                 return new CrawlingProductResponseDto(
                         product.getId(),
                         product.getOriginalName(),
                         product.getDisplayName(),
+                        product.getShortDescription(),
                         product.getPrice(),
                         product.getImageUrl(),
                         product.getProductUrl(),

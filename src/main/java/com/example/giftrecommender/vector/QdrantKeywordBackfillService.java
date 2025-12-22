@@ -15,40 +15,46 @@ import java.util.List;
 @ConditionalOnProperty(prefix = "vector", name = "enabled", havingValue = "true")
 public class QdrantKeywordBackfillService {
 
-    private final CrawlingProductRepository productRepository;
+    private final CrawlingProductRepository crawlingProductRepository;
     private final QdrantAdminClient qdrantAdminClient;
 
     public void backfillKeywordsToQdrant() {
-        List<BackfillIdView> rows = productRepository.findAllIdsForQdrantKeywordBackfill();
+        List<BackfillIdView> rows = crawlingProductRepository.findAllIdsForQdrantKeywordBackfill();
         log.info("[BACKFILL] candidates={}", rows.size());
 
         int ok = 0;
         int fail = 0;
+        int skip = 0;
 
         for (BackfillIdView v : rows) {
             Long pointId = toQdrantPointId(v.getVectorPointId(), v.getId());
 
-            // id로 키워드만 별도 조회
-            List<String> keywords = productRepository.findKeywordsById(v.getId());
-            List<String> normalized = normalizeKeywords(keywords);
-
-            if (pointId == null || normalized.isEmpty()) {
-                log.warn("[BACKFILL][SKIP] id={}, pointId={}, keywords.size={}",
-                        v.getId(), v.getVectorPointId(), normalized.size());
+            if (pointId == null) {
+                skip++;
+                log.warn("[BACKFILL][SKIP] id={}, pointId=null", v.getId());
                 continue;
             }
 
+            // 키워드 조회 & 정규화
+            List<String> keywords = crawlingProductRepository.findKeywordsById(v.getId());
+            List<String> normalized = normalizeKeywords(keywords);
+
+            // 카테고리 조회
+            String category = crawlingProductRepository.findCategoryById(v.getId());
+
+            // 짧은 설명 조회
+            String shortDescription = crawlingProductRepository.findShortDescriptionById(v.getId());
+
             try {
-                qdrantAdminClient.setKeywordsForPoint(pointId, normalized);
+                qdrantAdminClient.setPayloadForPoint(pointId, normalized, category, shortDescription);
                 ok++;
             } catch (Exception e) {
                 fail++;
-                log.error("[BACKFILL][FAIL] id={}, pointId={}, err={}",
-                        v.getId(), pointId, e.toString());
+                log.error("[BACKFILL][FAIL] id={}, pointId={}, err={}", v.getId(), pointId, e.toString(), e);
             }
         }
 
-        log.info("[BACKFILL][DONE] success={}, fail={}", ok, fail);
+        log.info("[BACKFILL][DONE] success={}, fail={}, skip={}", ok, fail, skip);
     }
 
     /**
@@ -64,12 +70,18 @@ public class QdrantKeywordBackfillService {
     }
 
     private List<String> normalizeKeywords(List<String> keywords) {
-        if (keywords == null) return List.of();
+        if (keywords == null || keywords.isEmpty()) {
+            return List.of();
+        }
+
         List<String> result = new ArrayList<>();
         for (String s : keywords) {
             if (s == null) continue;
+
             String t = s.trim();
-            if (!t.isEmpty() && !result.contains(t)) {
+            if (t.isEmpty()) continue;
+
+            if (!result.contains(t)) {
                 result.add(t);
             }
         }
