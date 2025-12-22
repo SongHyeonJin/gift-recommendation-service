@@ -29,7 +29,6 @@ public class QdrantVectorProductSearch implements VectorProductSearch {
                                            int minPrice, int maxPrice,
                                            String age, String gender,
                                            int topK, double threshold) {
-        // 1. 임베딩
         List<Float> embedded;
         try {
             embedded = embeddingService.embed(query);
@@ -38,27 +37,42 @@ public class QdrantVectorProductSearch implements VectorProductSearch {
         }
         float[] vector = toFloatArray(embedded);
 
-        // 2. 필터 구성 (가격만 유지. 필요 시 확장)
+        // 가격 필터 구성
         Map<String, Object> filter = null;
         if (minPrice > 0 || maxPrice > 0) {
             List<Map<String, Object>> must = new ArrayList<>();
-            Map<String, Object> priceClause = new HashMap<>();
+
             Map<String, Object> range = new HashMap<>();
-            if (minPrice > 0) range.put("gte", minPrice);
-            if (maxPrice > 0) range.put("lte", maxPrice);
+            if (minPrice > 0) {
+                range.put("gte", minPrice);
+            }
+            if (maxPrice > 0) {
+                range.put("lte", maxPrice);
+            }
+
+            Map<String, Object> priceClause = new HashMap<>();
             priceClause.put("key", "price");
             priceClause.put("range", range);
+
             must.add(priceClause);
             filter = Collections.singletonMap("must", must);
         }
 
-        // 3. 요청 바디 (score_threshold를 절대 보내지 않음)
         int limit = Math.max(topK, 50);
+
         QdrantSearchRequest requestBody = new QdrantSearchRequest(
-                vector, limit, true, false, filter, null // score_threshold=null
+                vector,
+                limit,
+                true,          // with_vector
+                false,         // with_payload
+                filter,
+                null
         );
 
         try {
+            log.debug("[QDRANT][SEARCH][CALL] q='{}', limit={}, threshold={}",
+                    query, topK, threshold);
+
             QdrantSearchResponse response = qdrantWebClient.post()
                     .uri("/collections/{c}/points/search", qdrantProps.getCollection())
                     .contentType(MediaType.APPLICATION_JSON)
@@ -69,15 +83,18 @@ public class QdrantVectorProductSearch implements VectorProductSearch {
                     .bodyToMono(QdrantSearchResponse.class)
                     .block();
 
-            if (response == null || response.getResult() == null) {
+            if (response == null || response.getResult() == null || response.getResult().isEmpty()) {
+                log.debug("[QDRANT][SEARCH][OK] q='{}', rawHits=0", query);
                 return Collections.emptyList();
             }
 
-            // 4. productId 추출(유사도 순, 중복 제거)
             LinkedHashMap<Long, Double> ordered = new LinkedHashMap<>();
+
             for (QdrantSearchResponse.Item item : response.getResult()) {
                 Map<String, Object> payload = item.getPayload();
-                if (payload == null) continue;
+                if (payload == null) {
+                    continue;
+                }
 
                 Object pidObj = payload.get("productId");
                 Long pid = null;
@@ -86,10 +103,27 @@ public class QdrantVectorProductSearch implements VectorProductSearch {
                 } else if (pidObj instanceof String s && s.matches("\\d+")) {
                     pid = Long.parseLong(s);
                 }
-                if (pid != null && !ordered.containsKey(pid)) {
-                    ordered.put(pid, item.getScore());
+                if (pid == null || ordered.containsKey(pid)) {
+                    continue;
                 }
+
+                // Qdrant score는 distance (Cosine metric 가정)
+                double distance = item.getScore();
+                double similarity = 1.0 - distance;  // 1 - distance = cosine similarity
+
+                log.debug("[QDRANT][RAW] q='{}', productId={}, distance={}, similarity={}",
+                        query, pid, distance, similarity);
+
+                // similarity 기준으로 threshold 적용
+                if (similarity < threshold) {
+                    continue;
+                }
+
+                ordered.put(pid, similarity);
             }
+
+            log.debug("[QDRANT][SEARCH][OK] q='{}', hits={} (after threshold={})",
+                    query, ordered.size(), threshold);
 
             return ordered.entrySet().stream()
                     .limit(topK)
@@ -97,14 +131,19 @@ public class QdrantVectorProductSearch implements VectorProductSearch {
                     .collect(Collectors.toList());
 
         } catch (Exception e) {
-            log.error("[QDRANT][SEARCH][FAIL] q='{}' err={}", query, e.toString());
+            log.error("[QDRANT][SEARCH][FAIL] q='{}' err={}", query, e.toString(), e);
             return Collections.emptyList();
         }
     }
 
+
+
     private static float[] toFloatArray(List<Float> list) {
         float[] arr = new float[list.size()];
-        for (int i = 0; i < list.size(); i++) arr[i] = list.get(i);
+        for (int i = 0; i < list.size(); i++) {
+            arr[i] = list.get(i);
+        }
         return arr;
     }
+
 }

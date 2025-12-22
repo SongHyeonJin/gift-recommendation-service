@@ -42,11 +42,46 @@ public class ProductVectorService {
         return JsonWithInt.Value.newBuilder().setListValue(list.build()).build();
     }
 
-    /**
-     * 상품 업서트: 벡터 + payload(title, price, productId, keywords[])
-     */
-    public void upsertProduct(Long productId, String title, long price, List<String> keywords) throws Exception {
-        List<Float> titleVec = embeddingService.embed(title);
+    public void upsertProduct(Long productId,
+                              String title,
+                              long price,
+                              String category,
+                              String shortDescription,
+                              List<String> keywords) throws Exception {
+        StringBuilder sb = new StringBuilder();
+
+        if (title != null && !title.isBlank()) {
+            sb.append(title.trim());
+        }
+
+        if (keywords != null && !keywords.isEmpty()) {
+            sb.append(" ");
+            sb.append(
+                    keywords.stream()
+                            .filter(Objects::nonNull)
+                            .map(String::trim)
+                            .filter(s -> !s.isEmpty())
+                            .distinct()
+                            .reduce((a, b) -> a + " " + b)
+                            .orElse("")
+            );
+        }
+
+        if (category != null && !category.isBlank()) {
+            sb.append(" ").append(category.trim());
+        }
+
+        if (shortDescription != null && !shortDescription.isBlank()) {
+            sb.append(" ").append(shortDescription.trim());
+        }
+
+        String textForEmbedding = sb.toString().trim();
+        if (textForEmbedding.isEmpty()) {
+            log.warn("[VECTOR] upsert skip - no text to embed. productId={}", productId);
+            return;
+        }
+
+        List<Float> vec = embeddingService.embed(textForEmbedding);
 
         Points.PointStruct.Builder point = Points.PointStruct.newBuilder()
                 .setId(Points.PointId.newBuilder().setNum(productId))
@@ -54,7 +89,7 @@ public class ProductVectorService {
                         Points.Vectors.newBuilder()
                                 .setVector(
                                         Points.Vector.newBuilder()
-                                                .addAllData(toFloatList(titleVec))
+                                                .addAllData(toFloatList(vec))
                                                 .build()
                                 )
                                 .build()
@@ -62,6 +97,17 @@ public class ProductVectorService {
                 .putPayload("productId", JsonWithInt.Value.newBuilder().setIntegerValue(productId).build())
                 .putPayload("title", JsonWithInt.Value.newBuilder().setStringValue(title).build())
                 .putPayload("price", JsonWithInt.Value.newBuilder().setIntegerValue(price).build());
+
+        if (category != null && !category.isBlank()) {
+            point.putPayload("category", JsonWithInt.Value.newBuilder().setStringValue(category).build());
+        }
+
+        if (shortDescription != null && !shortDescription.isBlank()) {
+            point.putPayload(
+                    "shortDescription",
+                    JsonWithInt.Value.newBuilder().setStringValue(shortDescription.trim()).build()
+            );
+        }
 
         List<String> normalized = (keywords == null) ? List.of()
                 : keywords.stream()
@@ -82,6 +128,7 @@ public class ProductVectorService {
 
         qdrant.upsertAsync(upsert).get(10, TimeUnit.SECONDS);
     }
+
 
     @Deprecated(forRemoval = true)
     public void upsertProduct(Long productId, String title, long price) throws Exception {
