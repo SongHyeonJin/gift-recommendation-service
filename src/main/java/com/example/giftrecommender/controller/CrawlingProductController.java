@@ -27,9 +27,7 @@ import com.example.giftrecommender.dto.response.product.ProductKeywordBulkSaveRe
 import com.example.giftrecommender.service.CrawlingProductSaver;
 import com.example.giftrecommender.service.CrawlingProductService;
 import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.media.Content;
-import io.swagger.v3.oas.annotations.media.ExampleObject;
-import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -86,6 +84,35 @@ public class CrawlingProductController {
         );
         return ResponseEntity.ok(
                 BasicResponseDto.success("크롤링 상품 목록 조회 완료.", page)
+        );
+    }
+
+    @Operation(
+            summary = "크롤링 상품 유사도 검색 (벡터 기반 필터/정렬/페이징)",
+            description = """
+        - OpenAI 임베딩 + 벡터스토어(Qdrant)를 활용한 유사도 기반 상품 검색 API
+        - keyword를 임베딩하여 코사인 유사도로 유사한 상품을 우선 정렬합니다.
+        - 나머지 필터(minPrice, category, gender, age 등)는 벡터 검색 결과에 2차 필터로 적용됩니다.
+        """
+    )
+    @GetMapping("/similarity-search")
+    public ResponseEntity<BasicResponseDto<Page<CrawlingProductResponseDto>>> getProductsSimilaritySearch(
+            @RequestParam(name = "keyword",     required = false) String keyword,
+            @RequestParam(name = "minPrice",    required = false) Integer minPrice,
+            @RequestParam(name = "maxPrice",    required = false) Integer maxPrice,
+            @RequestParam(name = "category",    required = false) String category,
+            @RequestParam(name = "platform",    required = false) String platform,
+            @RequestParam(name = "sellerName",  required = false) String sellerName,
+            @RequestParam(name = "gender",      required = false) Gender gender,
+            @RequestParam(name = "age",         required = false) Age age,
+            @RequestParam(name = "isConfirmed", required = false) Boolean isConfirmed,
+            @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable
+    ) {
+        Page<CrawlingProductResponseDto> page = crawlingProductService.getProductsSimilaritySearch(
+                keyword, minPrice, maxPrice, category, platform, sellerName, gender, age, isConfirmed, pageable
+        );
+        return ResponseEntity.ok(
+                BasicResponseDto.success("벡터 유사도 기반 크롤링 상품 목록 조회 완료.", page)
         );
     }
 
@@ -207,6 +234,31 @@ public class CrawlingProductController {
         ProductKeywordBulkSaveResponse response = crawlingProductService.updateKeywordsBulk(request);
         return ResponseEntity.ok(
                 BasicResponseDto.success("선택한 상품의 키워드가 성공적으로 수정되었습니다.", response)
+        );
+    }
+
+    @Operation(
+            summary = "키워드 기반 상품 통계 조회",
+            description = """
+                입력한 키워드에 매칭되는 상품들의 통계를 조회합니다.
+                - 성별 분포
+                - 연령대 분포
+                - 가격대 분포
+                - 전체 상품 개수
+                """
+    )
+    @GetMapping("/admin/stats/keyword")
+    public ResponseEntity<BasicResponseDto<KeywordStatsResponse>> getKeywordStats(
+            @Parameter(description = "조회할 키워드", example = "운동화")
+            @RequestParam("keyword") String keyword
+    ) {
+        KeywordStatsResponse response = crawlingProductService.getStats(keyword);
+
+        return ResponseEntity.ok(
+                BasicResponseDto.success(
+                        "키워드 통계가 성공적으로 조회되었습니다.",
+                        response
+                )
         );
     }
 
