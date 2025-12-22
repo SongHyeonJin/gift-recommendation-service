@@ -10,6 +10,7 @@ public class CrawlingProductMapper {
                 product.getId(),
                 product.getOriginalName(),
                 product.getDisplayName(),
+                product.getShortDescription(),
                 product.getPrice(),
                 product.getImageUrl(),
                 product.getProductUrl(),
