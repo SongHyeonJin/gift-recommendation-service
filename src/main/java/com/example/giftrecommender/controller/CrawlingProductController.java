@@ -247,7 +247,7 @@ public class CrawlingProductController {
                 - 전체 상품 개수
                 """
     )
-    @GetMapping("/admin/stats/keyword")
+    @GetMapping("/stats/keyword")
     public ResponseEntity<BasicResponseDto<KeywordStatsResponse>> getKeywordStats(
             @Parameter(description = "조회할 키워드", example = "운동화")
             @RequestParam("keyword") String keyword
@@ -259,6 +259,21 @@ public class CrawlingProductController {
                         "키워드 통계가 성공적으로 조회되었습니다.",
                         response
                 )
+        );
+    }
+
+    @Operation(
+            summary = "상품 삭제 API",
+            description = "상품 ID를 기준으로 상품을 삭제합니다."
+    )
+    @DeleteMapping("/{product_id}")
+    public ResponseEntity<BasicResponseDto<Void>> deleteProduct(
+            @PathVariable("product_id") Long productId
+    ) {
+        crawlingProductService.deleteProduct(productId);
+
+        return ResponseEntity.ok(
+                BasicResponseDto.success("상품이 성공적으로 삭제되었습니다.", null)
         );
     }
 
