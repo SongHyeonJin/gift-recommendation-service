@@ -107,14 +107,14 @@ jobs:
             fi
 
             echo "[INFO] Wait for Qdrant health"
-            for i in {1..30}; do
+            for i in {1..60}; do
               if curl -sf http://127.0.0.1:6333/healthz >/dev/null; then
                 echo "[INFO] Qdrant healthy"
                 break
               fi
-              echo "[INFO] Waiting Qdrant... ($i/30)"
+              echo "[INFO] Waiting Qdrant... ($i/60)"
               sleep 2
-              if [ "$i" -eq 30 ]; then
+              if [ "$i" -eq 60 ]; then
                 echo "[ERROR] Qdrant did not become healthy"
                 sudo docker ps
                 sudo docker logs qdrant --tail=200 || true
@@ -150,13 +150,13 @@ jobs:
           PID=$(pgrep -f 'giftrecommender-0.0.1-SNAPSHOT.jar' || true)
           if [ -n "$PID" ]; then
             kill -15 $PID || true
-            for i in {1..60}; do
+            for i in {1..90}; do
               sleep 1
               if ! ps -p $PID >/dev/null; then
                 echo "[INFO] Process $PID terminated"
                 break
               fi
-              if [ "$i" -eq 60 ]; then
+              if [ "$i" -eq 90 ]; then
                 echo "[WARN] Force killing $PID"
                 kill -9 $PID || true
               fi
@@ -165,16 +165,46 @@ jobs:
             echo "[INFO] No existing process"
           fi
 
-          echo "[INFO] Start Spring Boot (point to local Qdrant)"
+          echo "[INFO] Start Spring Boot"
           export QDRANT_HTTP_BASE_URL="http://127.0.0.1:6333"
           export QDRANT_GRPC_HOST="127.0.0.1"
           export QDRANT_GRPC_PORT="6334"
-
+          
+           if [ -f "$HOME/app.log" ]; then
+            mv "$HOME/app.log" "$HOME/app.log.$(date +%Y%m%d_%H%M%S).bak" || true
+          fi
+          
           nohup java -jar \
             -Dspring.profiles.active=prod \
             -Dspring.config.additional-location="$HOME/application-secret.yml" \
             "$HOME/giftrecommender-0.0.1-SNAPSHOT.jar" \
             > "$HOME/app.log" 2>&1 &
+          
+          APP_PID=$!
+          echo "[INFO] App PID: $APP_PID"
+          
+          echo "[INFO] Wait for app HTTP response"
+          for i in {1..450}; do
+            if ! ps -p $APP_PID >/dev/null 2>&1; then
+              echo "[ERROR] App process exited unexpectedly"
+              tail -n 400 "$HOME/app.log" || true
+              exit 1
+            fi
+
+            if curl -sf http://127.0.0.1:8080/swagger-ui/index.html >/dev/null; then
+              echo "[INFO] Swagger is responding"
+              break
+            fi
+
+            echo "[INFO] Waiting HTTP... ($i/450)"
+            sleep 2
+
+            if [ "$i" -eq 450 ]; then
+              echo "[ERROR] App did not respond in time"
+              tail -n 400 "$HOME/app.log" || true
+              exit 1
+            fi
+          done
 
           echo "[INFO] Tail recent logs"
           tail -n 200 "$HOME/app.log" || true
