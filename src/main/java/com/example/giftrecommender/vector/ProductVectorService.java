@@ -129,6 +129,36 @@ public class ProductVectorService {
         qdrant.upsertAsync(upsert).get(10, TimeUnit.SECONDS);
     }
 
+    /*
+     * Qdrant에서 상품 벡터(포인트) 삭제
+     */
+    public void deleteProduct(Long productId) throws Exception {
+        if (productId == null) {
+            log.warn("[VECTOR] delete skip - productId is null");
+            return;
+        }
+
+        Points.PointId pid = Points.PointId.newBuilder()
+                .setNum(productId)
+                .build();
+
+        Points.PointsIdsList idsList = Points.PointsIdsList.newBuilder()
+                .addIds(pid)
+                .build();
+
+        Points.PointsSelector selector = Points.PointsSelector.newBuilder()
+                .setPoints(idsList)
+                .build();
+
+        Points.DeletePoints delete = Points.DeletePoints.newBuilder()
+                .setCollectionName(qdrantProps.getCollection())
+                .setPoints(selector)
+                .build();
+
+        qdrant.deleteAsync(delete).get(10, TimeUnit.SECONDS);
+        log.info("[VECTOR] delete ok - productId={}", productId);
+    }
+
 
     @Deprecated(forRemoval = true)
     public void upsertProduct(Long productId, String title, long price) throws Exception {
