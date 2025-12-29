@@ -66,6 +66,7 @@ jobs:
             sudo systemctl enable docker
             sudo systemctl start docker
           fi
+          
           if ! sudo docker compose version >/dev/null 2>&1; then
             if command -v apt-get >/dev/null 2>&1; then
               sudo apt-get install -y docker-compose-plugin || true
@@ -73,6 +74,7 @@ jobs:
               sudo yum install -y docker-compose-plugin || true
             fi
           fi
+          
           if ! command -v curl >/dev/null 2>&1; then
             if command -v apt-get >/dev/null 2>&1; then
               sudo apt-get install -y curl
@@ -80,6 +82,7 @@ jobs:
               sudo yum install -y curl
             fi
           fi
+          
           if ! command -v java >/dev/null 2>&1; then
             if command -v apt-get >/dev/null 2>&1; then
               sudo apt-get update -y && sudo apt-get install -y openjdk-21-jre
@@ -176,7 +179,6 @@ jobs:
           echo "[INFO] Tail recent logs"
           tail -n 200 "$HOME/app.log" || true
           EOF
-      
 
       - name: Clean up PEM key
         run: rm -f ec2_key.pem
