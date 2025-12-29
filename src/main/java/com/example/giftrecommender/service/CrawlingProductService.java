@@ -31,10 +31,12 @@ import com.example.giftrecommender.dto.response.product.*;
 import com.example.giftrecommender.mapper.CrawlingProductMapper;
 import com.example.giftrecommender.vector.ProductVectorService;
 import com.example.giftrecommender.vector.VectorProductSearch;
+import com.example.giftrecommender.vector.event.ProductDeletedEvent;
 import jakarta.validation.ConstraintViolationException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.core.NestedExceptionUtils;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.*;
@@ -61,6 +63,7 @@ public class CrawlingProductService {
     private final CrawlingProductSaver crawlingProductSaver;
     private final ObjectProvider<ProductVectorService> productVectorServiceProvider;
     private final ObjectProvider<VectorProductSearch> vectorProductSearchProvider;
+    private final ApplicationEventPublisher eventPublisher;
 
     // 벡터 후보 풀 크기
     private static final int SIMILARITY_CANDIDATE_LIMIT = 80;
@@ -724,6 +727,21 @@ public class CrawlingProductService {
                 ));
 
         return new KeywordStatsResponse(total, genderStats, ageStats, priceStats);
+    }
+
+    /*
+     * 상품 삭제 (벡터 스토어에서도 상품 삭제)
+     */
+    @Transactional
+    public void deleteProduct(Long productId) {
+        CrawlingProduct product = crawlingProductRepository.findById(productId)
+                .orElseThrow(() -> new ErrorException(
+                        ExceptionEnum.PRODUCT_NOT_FOUND
+                ));
+
+        crawlingProductRepository.delete(product);
+
+        eventPublisher.publishEvent(new ProductDeletedEvent(product.getId()));
     }
 
     // =========================
