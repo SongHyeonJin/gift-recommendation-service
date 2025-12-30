@@ -10,8 +10,9 @@ import java.util.List;
 @Schema(description = "상품 단건 부분 수정 요청")
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public record CrawlingProductUpdateRequestDto(
-        @Schema(description = "원본명", example = "[무아스] 마카롱 3구 USB 고용량 큐브 멀티탭 1.5m")
-        @Size(max = 300) String originalName,
+        @Schema(description = "노출명(관리자 수정용)", example = "무아스 마카롱 USB 큐브 멀티탭")
+        @Size(max = 300)
+        String displayName,
 
         @Schema(description = "가격(원)", example = "17900")
         @Min(0) Integer price,

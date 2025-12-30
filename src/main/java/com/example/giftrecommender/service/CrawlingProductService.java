@@ -448,11 +448,10 @@ public class CrawlingProductService {
         boolean keywordsChanged = false;
         boolean textChanged = false;
 
-        if (requestDto.originalName() != null) {
-            String originalName = requestDto.originalName();
-
-            product.changeOriginalName(originalName);
-            product.changeDisplayName(generateDisplayName(originalName));
+        if (requestDto.displayName() != null) {
+            String displayName = requestDto.displayName().trim();
+            if (displayName.isBlank()) throw new ErrorException(ExceptionEnum.INVALID_REQUEST);
+            product.changeDisplayName(displayName);
             textChanged = true;
         }
 
