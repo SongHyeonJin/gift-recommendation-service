@@ -2,7 +2,8 @@ name: CD - Deploy to EC2 (Main Only)
 
 on:
   push:
-    branches: [ main ]
+    branches:
+      - 'disabled/never-trigger'
 
 jobs:
   deploy:
