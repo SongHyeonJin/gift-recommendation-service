@@ -111,6 +111,22 @@ public class CrawlingProductQueryRepository {
     }
 
     /**
+     * keywords까지 같이 로딩해야 하는 경우(fetch join)
+     * - ElementCollection(fetch = LAZY)라면 서비스에서 keywords 접근 시 LazyInitializationException 방지용
+     */
+    public List<CrawlingProduct> searchByIdsWithKeywords(List<Long> ids) {
+        if (ids == null || ids.isEmpty()) return List.of();
+
+        QCrawlingProduct p = QCrawlingProduct.crawlingProduct;
+
+        return queryFactory.selectFrom(p)
+                .leftJoin(p.keywords).fetchJoin()
+                .where(p.id.in(ids))
+                .distinct()
+                .fetch();
+    }
+
+    /**
      * keywords/title/category에 대해:
      * 1. 일반 containsIgnoreCase(query)
      * 2. 공백 제거 후 contains(queryNoSpace)

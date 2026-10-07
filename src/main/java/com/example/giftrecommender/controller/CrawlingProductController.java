@@ -106,10 +106,11 @@ public class CrawlingProductController {
             @RequestParam(name = "gender",      required = false) Gender gender,
             @RequestParam(name = "age",         required = false) Age age,
             @RequestParam(name = "isConfirmed", required = false) Boolean isConfirmed,
+            @RequestParam(name = "limit", required = false) Integer limit,
             @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable
     ) {
         Page<CrawlingProductResponseDto> page = crawlingProductService.getProductsSimilaritySearch(
-                keyword, minPrice, maxPrice, category, platform, sellerName, gender, age, isConfirmed, pageable
+                keyword, minPrice, maxPrice, category, platform, sellerName, gender, age, isConfirmed, limit, pageable
         );
         return ResponseEntity.ok(
                 BasicResponseDto.success("벡터 유사도 기반 크롤링 상품 목록 조회 완료.", page)

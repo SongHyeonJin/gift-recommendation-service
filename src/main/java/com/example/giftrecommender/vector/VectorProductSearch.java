@@ -16,7 +16,7 @@ public interface VectorProductSearch {
      * @param threshold     유사도 임계값 (예: 0.78)
      */
     List<ScoredId> searchWithScores(String query,
-                                    int minPrice, int maxPrice,
+                                    Integer minPrice, Integer maxPrice,
                                     String age, String gender,
-                                    int topK, double threshold);
+                                    int topK, Double threshold);
 }
