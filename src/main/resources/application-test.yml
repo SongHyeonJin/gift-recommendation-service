@@ -16,3 +16,9 @@ openai:
 
 vector:
   enabled: false
+
+backfill:
+  short-description:
+    enabled: false
+  category:
+    enabled: false
