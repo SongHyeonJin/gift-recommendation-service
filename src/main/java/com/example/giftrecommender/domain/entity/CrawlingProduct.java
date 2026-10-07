@@ -46,7 +46,7 @@ public class CrawlingProduct {
     @Column(name = "product_url", nullable = false, length = 768, unique = true)
     private String productUrl;
 
-    // 카테고리명
+    // 원본 상품 카테고리 (상세, 외부 기준)
     @Column(length = 100)
     private String category;
 
