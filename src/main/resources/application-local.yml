@@ -6,10 +6,17 @@ spring:
 
   jpa:
     hibernate:
-      ddl-auto: create-drop
+      ddl-auto: update
 
 openai:
   enabled: true
 
 vector:
   enabled: true
+
+backfill:
+  short-description:
+    enabled: true
+  category:
+    enabled: true
+    mismatch-debug-log: true

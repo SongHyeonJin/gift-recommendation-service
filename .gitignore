@@ -6,6 +6,11 @@ build/
 !**/src/test/**/build/
 src/main/resources/application-secret.yml
 logs/
+PROMPT.md
+.env
+qdrant_storage/
+qdrant_data/
+src/main/generated/
 
 ### STS ###
 .apt_generated
