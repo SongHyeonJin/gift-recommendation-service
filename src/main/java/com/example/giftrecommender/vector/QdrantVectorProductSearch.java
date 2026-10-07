@@ -25,10 +25,12 @@ public class QdrantVectorProductSearch implements VectorProductSearch {
     private final QdrantProps qdrantProps;
 
     @Override
-    public List<ScoredId> searchWithScores(String query,
-                                           int minPrice, int maxPrice,
-                                           String age, String gender,
-                                           int topK, double threshold) {
+    public List<ScoredId> searchWithScores(
+            String query,
+            Integer minPrice, Integer maxPrice,
+            String age, String gender,
+            int topK, Double threshold
+    ) {
         List<Float> embedded;
         try {
             embedded = embeddingService.embed(query);
@@ -37,27 +39,14 @@ public class QdrantVectorProductSearch implements VectorProductSearch {
         }
         float[] vector = toFloatArray(embedded);
 
-        // 가격 필터 구성
-        Map<String, Object> filter = null;
-        if (minPrice > 0 || maxPrice > 0) {
-            List<Map<String, Object>> must = new ArrayList<>();
+        // ✅ null-safe 보정
+        int min = (minPrice == null) ? 0 : minPrice;
+        int max = (maxPrice == null) ? Integer.MAX_VALUE : maxPrice;
 
-            Map<String, Object> range = new HashMap<>();
-            if (minPrice > 0) {
-                range.put("gte", minPrice);
-            }
-            if (maxPrice > 0) {
-                range.put("lte", maxPrice);
-            }
+        // ✅ Qdrant filter 구성
+        Map<String, Object> filter = buildFilter(min, max, age, gender);
 
-            Map<String, Object> priceClause = new HashMap<>();
-            priceClause.put("key", "price");
-            priceClause.put("range", range);
-
-            must.add(priceClause);
-            filter = Collections.singletonMap("must", must);
-        }
-
+        // Qdrant limit (search 결과 후보 수)
         int limit = Math.max(topK, 50);
 
         QdrantSearchRequest requestBody = new QdrantSearchRequest(
@@ -66,12 +55,12 @@ public class QdrantVectorProductSearch implements VectorProductSearch {
                 true,          // with_vector
                 false,         // with_payload
                 filter,
-                null
+                null           // score_threshold (여기서는 사용 안 함)
         );
 
         try {
-            log.debug("[QDRANT][SEARCH][CALL] q='{}', limit={}, threshold={}",
-                    query, topK, threshold);
+            log.debug("[QDRANT][SEARCH][CALL] q='{}', limit={}, price=[{},{}], age={}, gender={}, threshold={}",
+                    query, limit, min, max, age, gender, threshold);
 
             QdrantSearchResponse response = qdrantWebClient.post()
                     .uri("/collections/{c}/points/search", qdrantProps.getCollection())
@@ -88,36 +77,23 @@ public class QdrantVectorProductSearch implements VectorProductSearch {
                 return Collections.emptyList();
             }
 
+            boolean applyThreshold = (threshold != null);
+            double th = applyThreshold ? threshold : Double.NEGATIVE_INFINITY;
+
             LinkedHashMap<Long, Double> ordered = new LinkedHashMap<>();
 
             for (QdrantSearchResponse.Item item : response.getResult()) {
                 Map<String, Object> payload = item.getPayload();
-                if (payload == null) {
-                    continue;
-                }
+                if (payload == null) continue;
 
-                Object pidObj = payload.get("productId");
-                Long pid = null;
-                if (pidObj instanceof Number) {
-                    pid = ((Number) pidObj).longValue();
-                } else if (pidObj instanceof String s && s.matches("\\d+")) {
-                    pid = Long.parseLong(s);
-                }
-                if (pid == null || ordered.containsKey(pid)) {
-                    continue;
-                }
+                Long pid = extractProductId(payload.get("productId"));
+                if (pid == null || ordered.containsKey(pid)) continue;
 
-                // Qdrant score는 distance (Cosine metric 가정)
+                // score는 distance (cosine metric 가정)
                 double distance = item.getScore();
-                double similarity = 1.0 - distance;  // 1 - distance = cosine similarity
+                double similarity = 1.0 - distance;
 
-                log.debug("[QDRANT][RAW] q='{}', productId={}, distance={}, similarity={}",
-                        query, pid, distance, similarity);
-
-                // similarity 기준으로 threshold 적용
-                if (similarity < threshold) {
-                    continue;
-                }
+                if (applyThreshold && similarity < th) continue;
 
                 ordered.put(pid, similarity);
             }
@@ -134,6 +110,52 @@ public class QdrantVectorProductSearch implements VectorProductSearch {
             log.error("[QDRANT][SEARCH][FAIL] q='{}' err={}", query, e.toString(), e);
             return Collections.emptyList();
         }
+    }
+
+    private Map<String, Object> buildFilter(int minPrice, int maxPrice, String age, String gender) {
+        List<Map<String, Object>> must = new ArrayList<>();
+
+        // ✅ price range (의미: min/max가 유효할 때만)
+        // - min=0, max=Integer.MAX_VALUE면 사실상 전체라 필터를 안 거는게 낫다.
+        boolean hasMin = minPrice > 0;
+        boolean hasMax = maxPrice < Integer.MAX_VALUE;
+
+        if (hasMin || hasMax) {
+            Map<String, Object> range = new HashMap<>();
+            if (hasMin) range.put("gte", minPrice);
+            if (hasMax) range.put("lte", maxPrice);
+
+            Map<String, Object> priceClause = new HashMap<>();
+            priceClause.put("key", "price");
+            priceClause.put("range", range);
+
+            must.add(priceClause);
+        }
+
+        // ✅ age match
+        if (age != null && !age.isBlank()) {
+            Map<String, Object> ageClause = new HashMap<>();
+            ageClause.put("key", "age");
+            ageClause.put("match", Map.of("value", age));
+            must.add(ageClause);
+        }
+
+        // ✅ gender match
+        if (gender != null && !gender.isBlank()) {
+            Map<String, Object> genderClause = new HashMap<>();
+            genderClause.put("key", "gender");
+            genderClause.put("match", Map.of("value", gender));
+            must.add(genderClause);
+        }
+
+        if (must.isEmpty()) return null;
+        return Map.of("must", must);
+    }
+
+    private Long extractProductId(Object pidObj) {
+        if (pidObj instanceof Number n) return n.longValue();
+        if (pidObj instanceof String s && s.matches("\\d+")) return Long.parseLong(s);
+        return null;
     }
 
 

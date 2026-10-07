@@ -224,6 +224,9 @@ public class CrawlingProductService {
 
     /*
      * 페이징 조회 + 동적 검색 (벡터 스토어 적용)
+     * - Vector Top-K 후보를 먼저 가져오고
+     * - 그 후보에 대해 Java에서 2차 필터링을 적용한 뒤
+     * - 메모리 페이징으로 반환
      */
     @Transactional(readOnly = true)
     public Page<CrawlingProductResponseDto> getProductsSimilaritySearch(
@@ -236,16 +239,16 @@ public class CrawlingProductService {
             Gender gender,
             Age age,
             Boolean isConfirmed,
+            Integer limit,
             Pageable pageable
     ) {
         Pageable safePageable = normalizeSort(pageable);
 
-        KeywordNormalized kn = normalizeKeyword(keyword);
-
         int effectiveMinPrice = (minPrice != null) ? minPrice : 0;
         int effectiveMaxPrice = (maxPrice != null) ? maxPrice : Integer.MAX_VALUE;
 
-        // 검색어가 없다면 기존 검색만 사용
+        // keyword 없으면 기존 DB 검색
+        KeywordNormalized kn = normalizeKeyword(keyword);
         if (!kn.hasKeyword()) {
             Page<CrawlingProduct> page = crawlingProductRepository.search(
                     null, null,
@@ -255,153 +258,215 @@ public class CrawlingProductService {
             return page.map(CrawlingProductMapper::toDto);
         }
 
+        // 키워드당 최대 10개만 보여주기
+        final int PER_KEYWORD_LIMIT = 10;
+
         VectorProductSearch vectorSearch = vectorProductSearchProvider.getIfAvailable();
-
-        String query = kn.rawLower();
-        String queryNoSpace = kn.noSpaceLower();
-
-        // (권장) lexical을 무한정 끌고 오지 않게 제한
-        // 최소한 현 페이지 크기만큼 + buffer 정도만 확보
-        int lexicalLimit = Math.max(safePageable.getPageSize() * 3, safePageable.getPageSize());
-
-        // 1) 문자열 기반 매칭 상품 먼저 가져오기
-        //    - 여기서 keywords 컬렉션 + 공백 제거 매칭까지 되도록 QueryRepository 쿼리를 수정해야 함
-        List<CrawlingProduct> lexicalMatches =
-                crawlingProductQueryRepository.searchByKeywordOrNameOrCategory(
-                        query,
-                        queryNoSpace,
-                        effectiveMinPrice,
-                        effectiveMaxPrice,
-                        category,
-                        platform,
-                        sellerName,
-                        gender,
-                        age,
-                        isConfirmed,
-                        lexicalLimit
-                );
-
-        Set<Long> usedIds = lexicalMatches.stream()
-                .map(CrawlingProduct::getId)
-                .collect(Collectors.toSet());
-
-        // 2) 벡터 검색 수행
-        List<VectorProductSearch.ScoredId> hits = List.of();
-        boolean useVector = (vectorSearch != null);
-
-        if (useVector) {
-            try {
-                hits = vectorSearch.searchWithScores(
-                        query,
-                        effectiveMinPrice,
-                        effectiveMaxPrice,
-                        (age != null) ? age.name() : null,
-                        (gender != null) ? gender.name() : null,
-                        SIMILARITY_CANDIDATE_LIMIT,
-                        SIMILARITY_THRESHOLD
-                );
-            } catch (Exception e) {
-                log.warn("[VECTOR][SEARCH][ERROR] q='{}', cause={}", query, e.toString());
-                hits = List.of();
-            }
+        if (vectorSearch == null) {
+            return new PageImpl<>(List.of(), safePageable, 0);
         }
 
-        // 3) 벡터 검색된 상품을 DB에서 조회
-        List<CrawlingProduct> vectorProducts = List.of();
+        String query = kn.rawLower();
 
-        if (!hits.isEmpty()) {
-            List<Long> hitIds = hits.stream()
-                    .map(VectorProductSearch.ScoredId::productId)
-                    .filter(id -> !usedIds.contains(id))
-                    .toList();
+        // limit이 들어오면 그걸 쓰고, 없으면 자동 계산 (기존 로직 유지)
+        int defaultTopK = Math.max(safePageable.getPageSize() * 10, 200);
+        int topK = sanitizeTopK(limit, defaultTopK);
 
-            if (!hitIds.isEmpty()) {
-                vectorProducts = crawlingProductQueryRepository.searchByIdsAndConditions(
-                        hitIds,
+        // 벡터 단계에서는 완화된 가격 범위로 후보 확보
+        PriceRange vectorRange = relaxedRange(effectiveMinPrice, effectiveMaxPrice);
+
+        List<VectorProductSearch.ScoredId> hits;
+        try {
+            // 1차: 완화된 가격 범위
+            hits = vectorSearch.searchWithScores(
+                    query,
+                    vectorRange.min(),
+                    vectorRange.max(),
+                    null,
+                    null,
+                    topK,
+                    null // threshold 없음
+            );
+
+            // 2차 보강: 너무 적으면 전체 범위로 후보 보강
+            if (hits.size() < PER_KEYWORD_LIMIT) {
+                List<VectorProductSearch.ScoredId> secondary = vectorSearch.searchWithScores(
+                        query,
+                        0,
+                        Integer.MAX_VALUE,
                         null,
-                        minPrice,
-                        maxPrice,
+                        null,
+                        topK,
+                        null
+                );
+
+                Map<Long, Double> mergedScore = new LinkedHashMap<>();
+                for (var h : hits) mergedScore.put(h.productId(), h.score());
+                for (var h : secondary) mergedScore.putIfAbsent(h.productId(), h.score());
+
+                hits = mergedScore.entrySet().stream()
+                        .map(e -> new VectorProductSearch.ScoredId(e.getKey(), e.getValue()))
+                        .toList();
+            }
+
+        } catch (Exception e) {
+            log.warn("[VECTOR][SEARCH][ERROR] q='{}', cause={}", query, e.toString());
+            return new PageImpl<>(List.of(), safePageable, 0);
+        }
+
+        if (hits.isEmpty()) {
+            return new PageImpl<>(List.of(), safePageable, 0);
+        }
+
+        // hitIds 조회
+        List<Long> hitIds = hits.stream()
+                .map(VectorProductSearch.ScoredId::productId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+
+        List<CrawlingProduct> candidates =
+                crawlingProductQueryRepository.searchByIdsWithKeywords(hitIds);
+
+        // scoreMap 구성
+        Map<Long, Double> scoreMap = hits.stream()
+                .collect(Collectors.toMap(
+                        VectorProductSearch.ScoredId::productId,
+                        VectorProductSearch.ScoredId::score,
+                        Double::max
+                ));
+
+        // score 높은 순 정렬
+        candidates = candidates.stream()
+                .sorted((a, b) -> Double.compare(
+                        scoreMap.getOrDefault(b.getId(), 0.0),
+                        scoreMap.getOrDefault(a.getId(), 0.0)
+                ))
+                .toList();
+
+        // 2차 필터 + 키워드 포함 우선(기존 유지)
+        List<CrawlingProduct> filtered = candidates.stream()
+                .filter(p -> matchesFilters(
+                        p,
+                        effectiveMinPrice,
+                        effectiveMaxPrice,
                         category,
                         platform,
                         sellerName,
                         gender,
                         age,
                         isConfirmed
-                );
-
-                Map<Long, Double> scoreMap = hits.stream()
-                        .collect(Collectors.toMap(
-                                VectorProductSearch.ScoredId::productId,
-                                VectorProductSearch.ScoredId::score,
-                                Double::max
-                        ));
-
-                vectorProducts = vectorProducts.stream()
-                        .sorted((a, b) -> Double.compare(
-                                scoreMap.getOrDefault(b.getId(), 0.0),
-                                scoreMap.getOrDefault(a.getId(), 0.0)
-                        ))
-                        .collect(Collectors.toList());
-            }
-        }
-
-        // 4) 문자열 매칭 상품의 메인 카테고리 기준으로 벡터 결과 필터링 (lexical이 충분할 때만)
-        Set<String> lexicalMainCategories = lexicalMatches.stream()
-                .map(CrawlingProduct::getCategory)
-                .filter(Objects::nonNull)
-                .map(this::extractMainCategory)
-                .collect(Collectors.toSet());
-
-        if (!lexicalMainCategories.isEmpty() && lexicalMatches.size() >= 3) {
-            vectorProducts = vectorProducts.stream()
-                    .filter(p -> {
-                        String cat = p.getCategory();
-                        if (cat == null) return false;
-                        String main = extractMainCategory(cat);
-                        return lexicalMainCategories.contains(main);
-                    })
-                    .collect(Collectors.toList());
-        }
-
-        // 5) 벡터로 추가하는 개수 제한
-        int maxVectorAdd = safePageable.getPageSize();
-        if (vectorProducts.size() > maxVectorAdd) {
-            vectorProducts = vectorProducts.subList(0, maxVectorAdd);
-        }
-
-        // 6) 문자열 매칭 + 벡터 매칭 합치기 (중복 제거)
-        List<CrawlingProduct> merged = new ArrayList<>(lexicalMatches.size() + vectorProducts.size());
-        merged.addAll(lexicalMatches);
-        merged.addAll(vectorProducts);
-
-        Map<Long, CrawlingProduct> uniqueMap = new LinkedHashMap<>();
-        for (CrawlingProduct p : merged) {
-            uniqueMap.put(p.getId(), p);
-        }
-        List<CrawlingProduct> resultList = new ArrayList<>(uniqueMap.values());
-
-        // 7) 검색어가 keywords/제목/카테고리에 포함된 상품은 항상 상위로 (공백 제거 포함)
-        resultList = resultList.stream()
+                ))
                 .sorted((a, b) -> {
                     boolean aMatch = containsKeyword(a, kn);
                     boolean bMatch = containsKeyword(b, kn);
                     if (aMatch == bMatch) return 0;
                     return aMatch ? -1 : 1;
                 })
+                .limit(PER_KEYWORD_LIMIT)
                 .toList();
 
-        // 8) pageable 적용 (메모리 페이징)
         int start = (int) safePageable.getOffset();
-        int end = Math.min(start + safePageable.getPageSize(), resultList.size());
+        int end = Math.min(start + safePageable.getPageSize(), filtered.size());
 
         List<CrawlingProductResponseDto> dtoList =
                 (start >= end)
                         ? List.of()
-                        : resultList.subList(start, end).stream()
+                        : filtered.subList(start, end).stream()
                         .map(CrawlingProductMapper::toDto)
                         .toList();
 
-        return new PageImpl<>(dtoList, safePageable, resultList.size());
+        return new PageImpl<>(dtoList, safePageable, filtered.size());
+    }
+
+    /**
+     * ✅ Java 2차 필터링
+     * - topK 후보에 대해 조건을 최종 적용
+     */
+    private boolean matchesFilters(
+            CrawlingProduct p,
+            int minPrice,
+            int maxPrice,
+            String category,
+            String platform,
+            String sellerName,
+            Gender gender,
+            Age age,
+            Boolean isConfirmed
+    ) {
+        // price
+        Integer price = p.getPrice();
+        if (price == null) return false;
+        if (price < minPrice || price > maxPrice) return false;
+
+        // category (완전일치/전방일치 정책은 취향대로 선택)
+        if (category != null && !category.isBlank()) {
+            String pc = safe(p.getCategory());
+            if (pc == null) return false;
+
+            // ✅ 예: "디지털>음향가전" 같은 계층형이면 startsWith가 더 현실적
+            // 완전 일치가 필요하면 equals로 변경
+            if (!pc.startsWith(category)) return false;
+        }
+
+        // platform
+        if (platform != null && !platform.isBlank()) {
+            String pp = safe(p.getPlatform());
+            if (pp == null || !pp.equalsIgnoreCase(platform)) return false;
+        }
+
+        // sellerName
+        if (sellerName != null && !sellerName.isBlank()) {
+            String ps = safe(p.getSellerName());
+            if (ps == null) return false;
+            if (!ps.toLowerCase(Locale.ROOT).contains(sellerName.toLowerCase(Locale.ROOT))) return false;
+        }
+
+        // gender
+        if (gender != null) {
+            if (p.getGender() == null || p.getGender() != gender) return false;
+        }
+
+        // age
+        if (age != null) {
+            if (p.getAge() == null || p.getAge() != age) return false;
+        }
+
+        // isConfirmed
+        if (isConfirmed != null) {
+            if (p.getIsConfirmed() == null || !p.getIsConfirmed().equals(isConfirmed)) return false;
+        }
+
+        return true;
+    }
+
+    private int sanitizeTopK(Integer limit, int defaultTopK) {
+        if (limit == null) return defaultTopK;
+        // 너무 작으면 필터 후 비기 쉬움 / 너무 크면 비용 증가
+        int v = limit;
+        if (v < 50) v = 50;
+        if (v > 2000) v = 2000;
+        return v;
+    }
+
+    private record PriceRange(int min, int max) {}
+
+    private PriceRange relaxedRange(int min, int max) {
+        // max가 무한대면 굳이 완화하지 않음
+        if (max == Integer.MAX_VALUE) {
+            return new PriceRange(Math.max(0, min), Integer.MAX_VALUE);
+        }
+        int slack = 20_000; // 운영 튜닝 값
+        int rMin = Math.max(0, min - slack);
+        int rMax = Math.min(Integer.MAX_VALUE, max + slack);
+        return new PriceRange(rMin, rMax);
+    }
+
+    /**
+     * Null-safe string
+     */
+    private String safe(String s) {
+        return (s == null || s.isBlank()) ? null : s;
     }
 
     /*
@@ -742,10 +807,6 @@ public class CrawlingProductService {
 
         eventPublisher.publishEvent(new ProductDeletedEvent(product.getId()));
     }
-
-    // =========================
-    // 아래부터 Helper Methods
-    // =========================
 
     /**
      * 키워드 정규화:

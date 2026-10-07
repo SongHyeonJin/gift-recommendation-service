@@ -175,4 +175,12 @@ public interface CrawlingProductRepository extends JpaRepository<CrawlingProduct
 
     List<CrawlingProduct> findByIdGreaterThanOrderByIdAsc(Long lastId, Pageable pageable);
 
+    @Query("""
+        select distinct p
+        from CrawlingProduct p
+        left join fetch p.keywords k
+        where p.id in :ids
+    """)
+    List<CrawlingProduct> findAllByIdInWithKeywords(@Param("ids") List<Long> ids);
+
 }
