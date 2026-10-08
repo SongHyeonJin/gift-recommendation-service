@@ -1,5 +1,3 @@
-version: "3.8"
-
 services:
 #  app:
 #    env_file:
@@ -36,7 +34,8 @@ services:
       QDRANT__STORAGE__ON_DISK: "true"
       QDRANT__STORAGE__DISABLE_FS_AVAILABILITY_CHECK: "true"
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:6333/healthz"]
+      # qdrant 이미지에는 wget/curl이 없어 bash의 /dev/tcp로 포트만 확인
+      test: ["CMD", "bash", "-c", ":> /dev/tcp/127.0.0.1/6333"]
       interval: 10s
       timeout: 3s
       retries: 10
